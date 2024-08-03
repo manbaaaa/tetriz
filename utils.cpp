@@ -12,14 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include "./utils.h"
+#include <chrono>
 
-namespace tc {  // terminal control
-void move_to(int row, int col);
-void set_fore_color(int id);
-void set_back_color(int id);
-void clear_screen();
-void reset_color();
-void hide_cursor();
-void show_cursor();
-}  // namespace tc
+int ut::fps() {
+  // static mean the variable will be initialized only once
+  static auto start = std::chrono::system_clock::now();
+  auto end = start;
+  static int frame_count = 0;
+  static int fps = 0;
+
+  end = std::chrono::system_clock::now();
+  frame_count++;
+  if (end - start > std::chrono::seconds(1)) {
+    fps = frame_count;
+    frame_count = 0;
+    start = end;
+  }
+
+  return fps;
+}
