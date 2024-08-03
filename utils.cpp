@@ -14,6 +14,8 @@
 
 #include "./utils.h"
 #include <chrono>
+#include <codecvt>
+#include <locale>
 
 int ut::fps() {
   // static mean the variable will be initialized only once
@@ -31,4 +33,9 @@ int ut::fps() {
   }
 
   return fps;
+}
+
+std::string ut::utf32_to_utf8(std::u32string str) {
+  std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
+  return convert.to_bytes(str);
 }
