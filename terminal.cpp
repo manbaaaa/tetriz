@@ -12,27 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <chrono>
-#include <iostream>
-#include <thread>
 #include "./terminal.h"
+#include <iostream>
 
-int main() {
-  // std::cout << "\033[5;10H" << "\033[38;5;214m" << "helloworld" <<
-  // "\033[10;1H"; tc::move_to(5, 10); tc::set_fore_color(214); std::cout <<
-  // "helloworld"; tc::move_to(10, 1); tc::reset_color();
-  tc::hide_cursor();
-  int i = 1;
-  while (true) {
-    /* code */
-    tc::clear_screen();
-    tc::move_to(i++, 10);
-    tc::set_back_color(15);
-    std::cout << "  ";
-    tc::reset_color();
-    std::cout << std::flush;
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-  }
+#define CSI "\033["
 
-  return 0;
+void tc::move_to(int row, int col) {
+  std::cout << CSI << row << ";" << col << "H";
 }
+
+void tc::set_fore_color(int id) { std::cout << CSI << "38;5;" << id << "m"; }
+
+void tc::set_back_color(int id) { std::cout << CSI << "48;5;" << id << "m"; }
+
+void tc::clear_screen() { std::cout << CSI << "2J"; }
+
+void tc::reset_color() { std::cout << CSI << "0m"; }
+
+void tc::hide_cursor() { std::cout << CSI << "?25l"; }
+
+void tc::show_cursor() { std::cout << CSI << "?25h"; }
