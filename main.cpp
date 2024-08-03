@@ -15,19 +15,27 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include "./draw.h"
 #include "./terminal.h"
 #include "./utils.h"
 
-void init() { tc::hide_cursor(); }
+void init() {
+  tc::clear_screen();
+  tc::hide_cursor();
+  dw::window(1, 1, 9, 6, "Hold");
+  dw::window(1, 10, 12, 22, "Tetriz");
+  dw::window(7, 1, 9, 16, "Status");
+  dw::window(19, 22, 8, 4, "Info");
+  dw::window(1, 22, 8, 18, "Next");
+}
 
 void loop() {
   int i = 1;
   while (true) {
     int fps = ut::fps();
-    tc::clear_screen();
-    tc::move_to(1, 1);
+    tc::move_to(10, 4);
     std::cout << "FPS: " << fps << std::flush;
-    tc::move_to(i++ % 20, 10);
+    tc::move_to(5, 10);
     tc::set_back_color(15);
     std::cout << "  ";
     tc::reset_color();
