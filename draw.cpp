@@ -68,4 +68,20 @@ void window(int top, int left, int width, int height, std::string title) {
   tc::move_to(top, ut::block2col(left) + (width * 2 - title.length()) / 2);
   std::cout << title;
 }
+
+void tetromino(const gm::Tetromino& t, int top, int left) {
+  for (int r = 0; r < t.size(); r++) {
+    tc::move_to(top + r, ut::block2col(left));
+    for (int c = 0; c < t[0].size(); c++) {
+      if (t[r][c] > 0) {
+        tc::set_back_color(static_cast<int>(gm::tetro_color[t[r][c]]));
+        std::cout << "  ";
+      } else {
+        tc::reset_color();
+        std::cout << "  ";
+      }
+    }
+  }
+}
+
 }  // namespace dw

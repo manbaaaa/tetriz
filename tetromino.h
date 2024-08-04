@@ -11,13 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
-
-#include <string>
+#include "./color.h"
 #include "./define.h"
-#include "./tetromino.h"
 
-namespace dw {
-void window(int top, int left, int width, int height, std::string title);
-void tetromino(const gm::Tetromino& t, int top, int left);
-}  // namespace dw
+namespace gm {
+// I[5][5] JLOSTZ[3][3]
+using Tetromino = std::vector<std::vector<int>>;
+extern Tetromino I, J, L, O, S, T, Z;
+extern Tetromino rotate(const Tetromino& t);
+extern std::map<int, Color> tetro_color;
+}  // namespace gm

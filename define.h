@@ -24,6 +24,7 @@
 #include <map>
 #include <string>
 #include <thread>
+#include <vector>
 
 #define KEY_Q 'q'
 #define KEY_W 'w'

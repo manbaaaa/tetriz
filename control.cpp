@@ -38,7 +38,9 @@ char getch() {
 void key_event() {
   while (running) {
     command = getch();
-    comm_func[command]();
+    if (comm_func.find(command) != comm_func.end()) {
+      comm_func[command]();
+    }
   }
 }
 

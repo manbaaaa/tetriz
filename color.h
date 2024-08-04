@@ -11,13 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
 
-#include <string>
-#include "./define.h"
-#include "./tetromino.h"
-
-namespace dw {
-void window(int top, int left, int width, int height, std::string title);
-void tetromino(const gm::Tetromino& t, int top, int left);
-}  // namespace dw
+enum class Color {
+  BLACK,
+  RED = 9,
+  GREEN = 2,
+  YELLOW = 11,
+  BLUE = 12,
+  CYAN = 14,
+  PURPLE = 5,
+  ORANGE = 214
+};

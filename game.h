@@ -13,10 +13,12 @@
 // limitations under the License.
 
 #pragma once
+#include "./tetromino.h"
 
 namespace gm {
 extern bool running;
 extern int row, col;
+extern Tetromino cur;
 
 void quit();
 void init();

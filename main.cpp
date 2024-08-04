@@ -40,8 +40,10 @@ void loop() {
     tc::move_to(10, 4);
     std::cout << "FPS: " << fps << std::flush;
     tc::move_to(gm::row, ut::block2col(gm::col));
-    tc::set_back_color(15);
-    std::cout << "  ";
+    // tc::set_back_color(15);
+    // std::cout << "  ";
+
+    dw::tetromino(gm::cur, gm::row, gm::col);
     tc::reset_color();
 
     std::cout << std::flush;
