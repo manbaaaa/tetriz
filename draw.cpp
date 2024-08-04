@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "./draw.h"
-#include <iostream>
-#include <string>
+#include "./define.h"
 #include "./terminal.h"
 #include "./utils.h"
 /**
@@ -42,11 +41,9 @@ const std::u32string style3 = U" ┏┓┗┛┃━";
 const std::u32string style4 = U" ╭╮╰╯│─";
 const std::u32string cur_style = style3;
 
-inline int block2col(int b) { return 2 * b - 1; }
-
 void window(int top, int left, int width, int height, std::string title) {
   for (int r = 0; r < height; r++) {
-    tc::move_to(top + r, block2col(left));
+    tc::move_to(top + r, ut::block2col(left));
     for (int c = 0; c < width; c++) {
       if (r == 0 && c == 0) {
         std::cout << ut::utf32_to_utf8({cur_style[0], cur_style[1]});
@@ -68,7 +65,7 @@ void window(int top, int left, int width, int height, std::string title) {
     }
   }
   // title
-  tc::move_to(top, block2col(left) + (width * 2 - title.length()) / 2);
+  tc::move_to(top, ut::block2col(left) + (width * 2 - title.length()) / 2);
   std::cout << title;
 }
 }  // namespace dw

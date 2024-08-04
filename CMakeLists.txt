@@ -3,5 +3,7 @@ project(tetriz)
 
 set(CXX_STANDARD 20)
 
+
 aux_source_directory(. src)
 add_executable(tetriz ${src})
+target_link_libraries(tetriz pthread)

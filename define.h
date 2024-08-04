@@ -12,23 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "./terminal.h"
-#include "./define.h"
+#pragma once
 
-#define CSI "\033["
+#include <termios.h>
 
-void tc::move_to(int row, int col) {
-  std::cout << CSI << row << ";" << col << "H";
-}
+#include <chrono>
+#include <codecvt>
+#include <functional>
+#include <iostream>
+#include <locale>
+#include <map>
+#include <string>
+#include <thread>
 
-void tc::set_fore_color(int id) { std::cout << CSI << "38;5;" << id << "m"; }
-
-void tc::set_back_color(int id) { std::cout << CSI << "48;5;" << id << "m"; }
-
-void tc::clear_screen() { std::cout << CSI << "2J"; }
-
-void tc::reset_color() { std::cout << CSI << "0m"; }
-
-void tc::hide_cursor() { std::cout << CSI << "?25l"; }
-
-void tc::show_cursor() { std::cout << CSI << "?25h"; }
+#define KEY_Q 'q'
+#define KEY_W 'w'
+#define KEY_A 'a'
+#define KEY_S 's'
+#define KEY_D 'd'

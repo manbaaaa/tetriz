@@ -12,23 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "./terminal.h"
-#include "./define.h"
+#include "./game.h"
 
-#define CSI "\033["
-
-void tc::move_to(int row, int col) {
-  std::cout << CSI << row << ";" << col << "H";
+namespace gm {
+bool running;
+int row, col;
+void init() {
+  running = true;
+  row = 2;
+  col = 15;
 }
-
-void tc::set_fore_color(int id) { std::cout << CSI << "38;5;" << id << "m"; }
-
-void tc::set_back_color(int id) { std::cout << CSI << "48;5;" << id << "m"; }
-
-void tc::clear_screen() { std::cout << CSI << "2J"; }
-
-void tc::reset_color() { std::cout << CSI << "0m"; }
-
-void tc::hide_cursor() { std::cout << CSI << "?25l"; }
-
-void tc::show_cursor() { std::cout << CSI << "?25h"; }
+void quit() { running = false; }
+void rotate() { row--; }
+void left() { col--; }
+void right() { col++; }
+void down() { row++; }
+}  // namespace gm

@@ -12,23 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "./terminal.h"
-#include "./define.h"
+#pragma once
 
-#define CSI "\033["
+namespace gm {
+extern char command;
 
-void tc::move_to(int row, int col) {
-  std::cout << CSI << row << ";" << col << "H";
-}
+char getch();
+void key_event();
+void start_listener();
 
-void tc::set_fore_color(int id) { std::cout << CSI << "38;5;" << id << "m"; }
-
-void tc::set_back_color(int id) { std::cout << CSI << "48;5;" << id << "m"; }
-
-void tc::clear_screen() { std::cout << CSI << "2J"; }
-
-void tc::reset_color() { std::cout << CSI << "0m"; }
-
-void tc::hide_cursor() { std::cout << CSI << "?25l"; }
-
-void tc::show_cursor() { std::cout << CSI << "?25h"; }
+// keyboard commands
+void command_quit();
+void command_rotate();
+void command_left();
+void command_right();
+void command_down();
+}  // namespace gm

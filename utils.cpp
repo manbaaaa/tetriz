@@ -13,11 +13,10 @@
 // limitations under the License.
 
 #include "./utils.h"
-#include <chrono>
-#include <codecvt>
-#include <locale>
+#include "./define.h"
 
-int ut::fps() {
+namespace ut {
+int fps() {
   // static mean the variable will be initialized only once
   static auto start = std::chrono::system_clock::now();
   auto end = start;
@@ -35,7 +34,9 @@ int ut::fps() {
   return fps;
 }
 
-std::string ut::utf32_to_utf8(std::u32string str) {
-  std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
+std::string utf32_to_utf8(std::u32string str) {
+  static std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
   return convert.to_bytes(str);
 }
+
+}  // namespace ut
