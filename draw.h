@@ -19,5 +19,7 @@
 
 namespace dw {
 void window(int top, int left, int width, int height, std::string title);
-void tetromino(const gm::Tetromino& t, int top, int left);
+void tetromino(const gm::Tetromino_1& t, int top, int left);
+void tetromino(const gm::Tetromino_2& t, int top, int left, int index);
+void tetromino(const gm::Tetromino_3& t, int top, int left, int index);
 }  // namespace dw

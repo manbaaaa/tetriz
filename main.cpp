@@ -43,7 +43,7 @@ void loop() {
     // tc::set_back_color(15);
     // std::cout << "  ";
 
-    dw::tetromino(gm::cur, gm::row, gm::col);
+    dw::tetromino(gm::cur_s, gm::row, gm::col, gm::cur_index);
     tc::reset_color();
 
     std::cout << std::flush;

@@ -18,7 +18,12 @@
 namespace gm {
 extern bool running;
 extern int row, col;
-extern Tetromino cur;
+extern Tetromino_1 cur;
+
+extern Tetromino_2 cur_set;
+extern int cur_index;
+
+extern Tetromino_3 cur_s;
 
 void quit();
 void init();

@@ -69,7 +69,7 @@ void window(int top, int left, int width, int height, std::string title) {
   std::cout << title;
 }
 
-void tetromino(const gm::Tetromino& t, int top, int left) {
+void tetromino(const gm::Tetromino_1& t, int top, int left) {
   for (int r = 0; r < t.size(); r++) {
     tc::move_to(top + r, ut::block2col(left));
     for (int c = 0; c < t[0].size(); c++) {
@@ -81,6 +81,36 @@ void tetromino(const gm::Tetromino& t, int top, int left) {
         std::cout << "  ";
       }
     }
+  }
+}
+
+void tetromino(const gm::Tetromino_2& t, int top, int left, int index) {
+  for (int r = 0; r < 4; r++) {
+    tc::move_to(top + r, ut::block2col(left));
+    for (int c = 0; c < 4; c++) {
+      if ((t[index] >> (r * 4 + c)) & 0x1) {
+        tc::set_back_color(t[index] >> 16 & 0xff);
+        std::cout << "  ";
+      } else {
+        tc::reset_color();
+        std::cout << "  ";
+      }
+    }
+  }
+}
+
+void tetromino(const gm::Tetromino_3& t, int top, int left, int index) {
+  tc::move_to(top, ut::block2col(left));
+  tc::set_back_color(t[index][0].second);
+  std::cout << "  ";
+  // (dx, dy).  --> (row, col)
+  // row = row - dy
+  // col = col + dx
+  // skip first element
+  for (auto p : t[index]) {
+    if (p.first > 'A') continue;
+    tc::move_to(top - p.second, ut::block2col(left + p.first));
+    std::cout << "  ";
   }
 }
 

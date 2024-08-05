@@ -18,15 +18,26 @@
 namespace gm {
 bool running;
 int row, col;
-Tetromino cur;
+Tetromino_1 cur;
+Tetromino_2 cur_set;
+Tetromino_3 cur_s;
+int cur_index;
 void init() {
   running = true;
   row = 2;
   col = 15;
   cur = O;
+  cur_set = I_set;
+  cur_index = 0;
+  cur_s = t;
 }
 void quit() { running = false; }
-void rotate() { cur = rotate(cur); }
+void rotate() {
+  // Tetromino_1
+  // cur = rotate(cur);
+  // Tetromino_2
+  cur_index = (cur_index + 1) % 4;
+}
 void left() { col--; }
 void right() { col++; }
 void down() { row++; }
