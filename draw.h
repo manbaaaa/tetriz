@@ -11,15 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
 
 #include <string>
-#include "./define.h"
-#include "./tetromino.h"
+
+#include "./game.h"
 
 namespace dw {
 void window(int top, int left, int width, int height, std::string title);
-void tetromino(const gm::Tetromino_1& t, int top, int left);
-void tetromino(const gm::Tetromino_2& t, int top, int left, int index);
-void tetromino(const gm::Tetromino_3& t, int top, int left, int index);
+void render(int fps);
 }  // namespace dw

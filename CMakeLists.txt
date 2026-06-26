@@ -1,9 +1,18 @@
 cmake_minimum_required(VERSION 3.22)
-project(tetriz)
+project(tetriz LANGUAGES CXX)
 
-set(CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(Threads REQUIRED)
 
-aux_source_directory(. src)
-add_executable(tetriz ${src})
-target_link_libraries(tetriz pthread)
+add_executable(tetriz
+  control.cpp
+  draw.cpp
+  game.cpp
+  main.cpp
+  terminal.cpp
+  utils.cpp
+)
+target_link_libraries(tetriz PRIVATE Threads::Threads)

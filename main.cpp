@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "./control.h"
-#include "./define.h"
 #include "./draw.h"
 #include "./game.h"
 #include "./terminal.h"
@@ -21,33 +20,20 @@
 
 void init() {
   tc::hide_cursor();
-  gm::start_listener();
   gm::init();
+  gm::start_listener();
 }
 
 void loop() {
-  int i = 1;
-  while (gm::running) {
-    tc::clear_screen();
-    tc::hide_cursor();
-    dw::window(1, 1, 9, 6, "Hold");
-    dw::window(1, 10, 12, 22, "Tetriz");
-    dw::window(7, 1, 9, 16, "Status");
-    dw::window(19, 22, 8, 4, "Info");
-    dw::window(1, 22, 8, 18, "Next");
-
-    int fps = ut::fps();
-    tc::move_to(10, 4);
-    std::cout << "FPS: " << fps << std::flush;
-    tc::move_to(gm::row, ut::block2col(gm::col));
-    // tc::set_back_color(15);
-    // std::cout << "  ";
-
-    dw::tetromino(gm::cur_s, gm::row, gm::col, gm::cur_index);
-    tc::reset_color();
-
-    std::cout << std::flush;
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  auto last_render = std::chrono::steady_clock::time_point{};
+  while (gm::running.load()) {
+    const auto now = std::chrono::steady_clock::now();
+    gm::tick(now);
+    if (now - last_render >= std::chrono::milliseconds(100)) {
+      dw::render(ut::fps());
+      last_render = now;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
 }
 
@@ -56,7 +42,6 @@ void exit() {
   tc::reset_color();
   tc::clear_screen();
   tc::move_to(1, 1);
-  tc::set_fore_color(9);
   std::cout << "Bye!" << std::endl;
 }
 
@@ -64,6 +49,5 @@ int main() {
   init();
   loop();
   exit();
-
   return 0;
 }

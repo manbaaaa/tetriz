@@ -16,11 +16,16 @@
 #include "./game.h"
 
 namespace gm {
-char command;
-
 std::map<char, std::function<void()>> comm_func = {
-    {KEY_Q, command_quit},  {KEY_W, command_rotate}, {KEY_A, command_left},
-    {KEY_D, command_right}, {KEY_S, command_down},
+    {KEY_Q, command_quit},      {KEY_W, command_rotate},
+    {KEY_A, command_left},      {KEY_D, command_right},
+    {KEY_S, command_down},      {KEY_SPACE, command_hard_drop},
+    {KEY_C, command_hold},      {KEY_P, command_pause},
+    {KEY_R, command_restart},
+    {'Q', command_quit},        {'W', command_rotate},
+    {'A', command_left},        {'D', command_right},
+    {'S', command_down},        {'C', command_hold},
+    {'P', command_pause},       {'R', command_restart},
 };
 
 char getch() {
@@ -36,8 +41,8 @@ char getch() {
 }
 
 void key_event() {
-  while (running) {
-    command = getch();
+  while (running.load()) {
+    const char command = getch();
     if (comm_func.find(command) != comm_func.end()) {
       comm_func[command]();
     }
@@ -54,4 +59,8 @@ void command_rotate() { rotate(); }
 void command_left() { left(); }
 void command_right() { right(); }
 void command_down() { down(); }
+void command_hard_drop() { hard_drop(); }
+void command_hold() { hold(); }
+void command_pause() { toggle_pause(); }
+void command_restart() { restart(); }
 }  // namespace gm
