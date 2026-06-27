@@ -205,17 +205,19 @@ std::string phase_label(gm::Phase phase) {
 }
 
 void draw_status(const gm::Snapshot& snapshot, int fps) {
-  const std::array<std::string, 7> lines = {
+  const std::array<std::string, 9> lines = {
       "Score " + std::to_string(snapshot.score),
       "High  " + std::to_string(snapshot.high_score),
       "Lv " + std::to_string(snapshot.level) + " Lines " +
           std::to_string(snapshot.lines),
       "Combo " + (snapshot.combo >= 0 ? std::to_string(snapshot.combo) : "-"),
       std::string("B2B   ") + (snapshot.back_to_back ? "on" : "off"),
+      std::string("PC    ") + (snapshot.perfect_clear ? "yes" : "no"),
+      std::string("TSpin ") + (snapshot.t_spin ? "yes" : "no"),
       "FPS   " + std::to_string(fps),
       phase_label(snapshot.phase),
   };
-  static std::array<std::string, 7> last_lines = {};
+  static std::array<std::string, 9> last_lines = {};
   for (int i = 0; i < static_cast<int>(lines.size()); i++) {
     if (last_lines[i] == lines[i]) {
       continue;
@@ -295,7 +297,7 @@ void render(int fps) {
     tc::hide_cursor();
     window(HOLD_TOP, HOLD_LEFT, 9, 7, "Hold");
     window(BOARD_TOP, BOARD_LEFT, gm::BOARD_WIDTH + 2, gm::BOARD_HEIGHT + 2, "Tetriz");
-    window(STATUS_TOP, STATUS_LEFT, 12, 15, "Status");
+    window(STATUS_TOP, STATUS_LEFT, 12, 19, "Status");
     window(NEXT_TOP, NEXT_LEFT, 9, 22, "Next");
     draw_info();
     first_render = false;

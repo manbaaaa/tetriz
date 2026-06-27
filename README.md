@@ -9,8 +9,8 @@ Tetriz 是一个使用 C++20 编写的终端版俄罗斯方块。项目直接在
 - Next 队列预览，提前展示后续方块
 - Hold 功能，可以暂存当前方块并在后续交换使用
 - Ghost 影子方块，显示当前方块硬降后的落点
-- 自动下落、软降、硬降、顺/逆时针旋转、180 度旋转和简化墙踢
-- 方块落地锁定、满行清除、分数计算、Combo、Back-to-back 和等级加速
+- 自动下落、软降、硬降、顺/逆时针旋转、180 度旋转和 SRS 墙踢
+- Lock delay、方块落地锁定、满行清除、T-Spin、Combo、Back-to-back、Perfect Clear 和等级加速
 - 本地最高分保存和状态栏展示
 - 暂停、继续、重开和 Game Over 状态
 - 退出或 Ctrl+C 时恢复终端光标和颜色
@@ -22,7 +22,7 @@ Tetriz 是一个使用 C++20 编写的终端版俄罗斯方块。项目直接在
 
 - `Hold`：暂存方块
 - `Tetriz`：主游戏棋盘
-- `Status`：分数、最高分、等级、消行数、Combo、Back-to-back、FPS 和当前状态
+- `Status`：分数、最高分、等级、消行数、T-Spin、Combo、Back-to-back、Perfect Clear、FPS 和当前状态
 - `High`：本地最高分，默认保存到当前目录的 `.tetriz_high_score`
 - `Next`：后续方块预览
 - `Controls`：按键提示
@@ -95,7 +95,7 @@ ctest --test-dir build --output-on-failure
 
 项目将游戏逻辑和渲染拆开：游戏层维护棋盘、当前方块、Hold、Next 队列、分数和状态；渲染层只读取游戏快照并更新终端界面。输入线程负责监听按键并调用游戏动作，主循环按固定节奏驱动自动下落和画面刷新。
 
-当前旋转规则使用简化墙踢，重点是保证终端版游戏稳定可玩；如果要进一步接近现代俄罗斯方块规则，可以继续扩展为完整 SRS。
+旋转规则使用 SRS 墙踢，落地后使用 lock delay 延迟锁定，并支持 T-Spin、Combo、Back-to-back 和 Perfect Clear 计分。当前 T-Spin 使用 T 方块最后动作为旋转且中心四角至少三处被占用的判定；如果要进一步接近现代俄罗斯方块规则，可以继续补充 T-Spin Mini 的细分。
 
 ## 参考
 

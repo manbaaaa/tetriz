@@ -23,26 +23,40 @@
 namespace gm {
 namespace {
 std::mutex state_mutex;
-Board board_state;
-Piece current;
-std::deque<PieceType> queue_state;
-std::optional<PieceType> hold_state;
-Phase phase_state = Phase::Playing;
-int score_state = 0;
-int high_score_state = 0;
-int level_state = 1;
-int lines_state = 0;
-int combo_state = -1;
-bool back_to_back_state = false;
-bool hold_used = false;
-std::chrono::steady_clock::time_point last_fall;
-std::string high_score_path = ".tetriz_high_score";
+constexpr int LOCK_DELAY_MS = 500;
+constexpr int MAX_LOCK_RESETS = 15;
+
+struct GameState {
+  Board board;
+  Piece current;
+  std::deque<PieceType> queue;
+  std::optional<PieceType> hold;
+  Phase phase = Phase::Playing;
+  int score = 0;
+  int high_score = 0;
+  int level = 1;
+  int lines = 0;
+  int combo = -1;
+  bool back_to_back = false;
+  bool perfect_clear = false;
+  bool last_action_rotate = false;
+  bool t_spin = false;
+  bool hold_used = false;
+  std::chrono::steady_clock::time_point last_fall;
+  std::optional<std::chrono::steady_clock::time_point> lock_started_at;
+  int lock_resets = 0;
+  std::string high_score_path = ".tetriz_high_score";
+};
+
+GameState state;
 
 std::mt19937& rng() {
   static std::random_device seed;
   static std::mt19937 engine(seed());
   return engine;
 }
+
+std::array<Point, 5> wall_kicks(PieceType type, int from, int to);
 
 Blocks base_blocks(PieceType type, int rotation) {
   const int r = rotation % 4;
@@ -101,12 +115,12 @@ void fill_bag() {
                                   PieceType::Z};
   std::shuffle(bag.begin(), bag.end(), rng());
   for (auto type : bag) {
-    queue_state.push_back(type);
+    state.queue.push_back(type);
   }
 }
 
 void ensure_queue() {
-  while (queue_state.size() < PREVIEW_COUNT + 1) {
+  while (state.queue.size() < PREVIEW_COUNT + 1) {
     fill_bag();
   }
 }
@@ -118,7 +132,7 @@ bool collides(const Piece& piece) {
     if (block.col < 0 || block.col >= BOARD_WIDTH || block.row >= BOARD_HEIGHT) {
       return true;
     }
-    if (block.row >= 0 && board_state[block.row][block.col].filled) {
+    if (block.row >= 0 && state.board[block.row][block.col].filled) {
       return true;
     }
   }
@@ -126,7 +140,7 @@ bool collides(const Piece& piece) {
 }
 
 Piece ghost_piece_unlocked() {
-  Piece ghost = current;
+  Piece ghost = state.current;
   while (!collides(Piece{ghost.type, ghost.row + 1, ghost.col, ghost.rotation})) {
     ghost.row++;
   }
@@ -134,38 +148,110 @@ Piece ghost_piece_unlocked() {
 }
 
 bool try_move(int row_delta, int col_delta) {
-  Piece moved = current;
+  Piece moved = state.current;
   moved.row += row_delta;
   moved.col += col_delta;
   if (collides(moved)) {
     return false;
   }
-  current = moved;
+  state.current = moved;
   return true;
 }
 
+bool grounded() {
+  Piece dropped = state.current;
+  dropped.row += 1;
+  return collides(dropped);
+}
+
+bool occupied_or_wall(int row, int col) {
+  if (col < 0 || col >= BOARD_WIDTH || row >= BOARD_HEIGHT) {
+    return true;
+  }
+  return row >= 0 && state.board[row][col].filled;
+}
+
+bool is_t_spin() {
+  if (!state.last_action_rotate || state.current.type != PieceType::T) {
+    return false;
+  }
+
+  const int center_row = state.current.row;
+  const int center_col = state.current.col;
+  int occupied_corners = 0;
+  for (const auto& corner : std::array<Point, 4>{
+           Point{-1, -1}, Point{-1, 1}, Point{1, -1}, Point{1, 1}}) {
+    if (occupied_or_wall(center_row + corner.row, center_col + corner.col)) {
+      occupied_corners++;
+    }
+  }
+  return occupied_corners >= 3;
+}
+
+void clear_lock_delay() {
+  state.lock_started_at.reset();
+  state.lock_resets = 0;
+}
+
+void maybe_reset_lock_delay() {
+  if (grounded() && state.lock_started_at.has_value() &&
+      state.lock_resets < MAX_LOCK_RESETS) {
+    state.lock_started_at = std::chrono::steady_clock::now();
+    state.lock_resets++;
+  } else if (!grounded()) {
+    clear_lock_delay();
+  }
+}
+
 void try_rotate_steps(int steps) {
-  if (phase_state != Phase::Playing || current.type == PieceType::O) {
+  if (state.phase != Phase::Playing || state.current.type == PieceType::O) {
     return;
   }
-  Piece rotated = current;
-  rotated.rotation = (rotated.rotation + steps + 4) % 4;
-  const std::array<int, 5> kicks = {0, -1, 1, -2, 2};
-  for (int kick : kicks) {
+  Piece rotated = state.current;
+  const int from = rotated.rotation;
+  const int to = (rotated.rotation + steps + 4) % 4;
+  rotated.rotation = to;
+  for (const auto& kick : wall_kicks(state.current.type, from, to)) {
     Piece candidate = rotated;
-    candidate.col += kick;
+    candidate.col += kick.col;
+    candidate.row += kick.row;
     if (!collides(candidate)) {
-      current = candidate;
+      state.current = candidate;
+      state.last_action_rotate = true;
+      maybe_reset_lock_delay();
       return;
     }
   }
+}
+
+std::array<Point, 5> wall_kicks(PieceType type, int from, int to) {
+  if (type == PieceType::I) {
+    if (from == 0 && to == 1) return {{{0, 0}, {0, -2}, {0, 1}, {-1, -2}, {2, 1}}};
+    if (from == 1 && to == 0) return {{{0, 0}, {0, 2}, {0, -1}, {1, 2}, {-2, -1}}};
+    if (from == 1 && to == 2) return {{{0, 0}, {0, -1}, {0, 2}, {2, -1}, {-1, 2}}};
+    if (from == 2 && to == 1) return {{{0, 0}, {0, 1}, {0, -2}, {-2, 1}, {1, -2}}};
+    if (from == 2 && to == 3) return {{{0, 0}, {0, 2}, {0, -1}, {1, 2}, {-2, -1}}};
+    if (from == 3 && to == 2) return {{{0, 0}, {0, -2}, {0, 1}, {-1, -2}, {2, 1}}};
+    if (from == 3 && to == 0) return {{{0, 0}, {0, 1}, {0, -2}, {-2, 1}, {1, -2}}};
+    if (from == 0 && to == 3) return {{{0, 0}, {0, -1}, {0, 2}, {2, -1}, {-1, 2}}};
+  }
+
+  if (from == 0 && to == 1) return {{{0, 0}, {0, -1}, {1, -1}, {-2, 0}, {-2, -1}}};
+  if (from == 1 && to == 0) return {{{0, 0}, {0, 1}, {-1, 1}, {2, 0}, {2, 1}}};
+  if (from == 1 && to == 2) return {{{0, 0}, {0, 1}, {-1, 1}, {2, 0}, {2, 1}}};
+  if (from == 2 && to == 1) return {{{0, 0}, {0, -1}, {1, -1}, {-2, 0}, {-2, -1}}};
+  if (from == 2 && to == 3) return {{{0, 0}, {0, 1}, {1, 1}, {-2, 0}, {-2, 1}}};
+  if (from == 3 && to == 2) return {{{0, 0}, {0, -1}, {-1, -1}, {2, 0}, {2, -1}}};
+  if (from == 3 && to == 0) return {{{0, 0}, {0, -1}, {-1, -1}, {2, 0}, {2, -1}}};
+  if (from == 0 && to == 3) return {{{0, 0}, {0, 1}, {1, 1}, {-2, 0}, {-2, 1}}};
+  return {{{0, 0}, {0, -1}, {0, 1}, {0, -2}, {0, 2}}};
 }
 
 int clear_lines() {
   int cleared = 0;
   for (int row = BOARD_HEIGHT - 1; row >= 0; row--) {
     bool full = true;
-    for (const auto& cell : board_state[row]) {
+    for (const auto& cell : state.board[row]) {
       if (!cell.filled) {
         full = false;
         break;
@@ -176,39 +262,58 @@ int clear_lines() {
     }
     cleared++;
     for (int move_row = row; move_row > 0; move_row--) {
-      board_state[move_row] = board_state[move_row - 1];
+      state.board[move_row] = state.board[move_row - 1];
     }
-    board_state[0] = {};
+    state.board[0] = {};
     row++;
   }
   return cleared;
 }
 
-void apply_score(int cleared, int drop_bonus) {
+bool board_empty() {
+  for (const auto& row : state.board) {
+    for (const auto& cell : row) {
+      if (cell.filled) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+void apply_score(int cleared, int drop_bonus, bool t_spin) {
   static const std::array<int, 5> line_scores = {0, 100, 300, 500, 800};
-  score_state += drop_bonus;
+  static const std::array<int, 4> t_spin_scores = {400, 800, 1200, 1600};
+  state.score += drop_bonus;
+  state.t_spin = t_spin;
   if (cleared > 0) {
-    const bool difficult_clear = cleared == 4;
-    int line_score = line_scores[cleared] * level_state;
-    if (difficult_clear && back_to_back_state) {
+    const bool difficult_clear = cleared == 4 || t_spin;
+    const int base_score = t_spin ? t_spin_scores[cleared] : line_scores[cleared];
+    int line_score = base_score * state.level;
+    if (difficult_clear && state.back_to_back) {
       line_score += line_score / 2;
     }
-    combo_state++;
-    if (combo_state > 0) {
-      line_score += combo_state * 50 * level_state;
+    state.combo++;
+    if (state.combo > 0) {
+      line_score += state.combo * 50 * state.level;
     }
-    score_state += line_score;
-    lines_state += cleared;
-    level_state = lines_state / 10 + 1;
-    back_to_back_state = difficult_clear;
+    state.score += line_score;
+    state.lines += cleared;
+    state.level = state.lines / 10 + 1;
+    state.back_to_back = difficult_clear;
+    state.perfect_clear = board_empty();
+    if (state.perfect_clear) {
+      state.score += 3500 * state.level;
+    }
   } else {
-    combo_state = -1;
+    state.combo = -1;
+    state.perfect_clear = false;
   }
-  high_score_state = std::max(high_score_state, score_state);
+  state.high_score = std::max(state.high_score, state.score);
 }
 
 int load_high_score() {
-  std::ifstream file(high_score_path);
+  std::ifstream file(state.high_score_path);
   int loaded = 0;
   if (file >> loaded) {
     return std::max(0, loaded);
@@ -217,57 +322,63 @@ int load_high_score() {
 }
 
 void save_high_score() {
-  if (high_score_path.empty()) {
+  if (state.high_score_path.empty()) {
     return;
   }
-  std::ofstream file(high_score_path, std::ios::trunc);
+  std::ofstream file(state.high_score_path, std::ios::trunc);
   if (file) {
-    file << high_score_state << '\n';
+    file << state.high_score << '\n';
   }
 }
 
 void spawn_next() {
   ensure_queue();
-  current = make_piece(queue_state.front());
-  queue_state.pop_front();
+  state.current = make_piece(state.queue.front());
+  state.queue.pop_front();
   ensure_queue();
-  hold_used = false;
-  if (collides(current)) {
-    phase_state = Phase::GameOver;
+  state.hold_used = false;
+  if (collides(state.current)) {
+    state.phase = Phase::GameOver;
   }
 }
 
 void lock_piece(int drop_bonus = 0) {
-  const Color color = piece_color(current.type);
-  for (const auto& block : blocks_for(current)) {
+  const Color color = piece_color(state.current.type);
+  for (const auto& block : blocks_for(state.current)) {
     if (block.row >= 0 && block.row < BOARD_HEIGHT && block.col >= 0 &&
         block.col < BOARD_WIDTH) {
-      board_state[block.row][block.col] = Cell{true, color};
+      state.board[block.row][block.col] = Cell{true, color};
     }
   }
   const int cleared = clear_lines();
-  apply_score(cleared, drop_bonus);
+  apply_score(cleared, drop_bonus, is_t_spin());
+  clear_lock_delay();
+  state.last_action_rotate = false;
   spawn_next();
 }
 
-int fall_interval_value() { return std::max(100, 800 - (level_state - 1) * 60); }
+int fall_interval_value() { return std::max(100, 800 - (state.level - 1) * 60); }
 
 void reset_game() {
-  board_state = {};
-  queue_state.clear();
-  hold_state.reset();
-  phase_state = Phase::Playing;
-  score_state = 0;
-  level_state = 1;
-  lines_state = 0;
-  combo_state = -1;
-  back_to_back_state = false;
-  hold_used = false;
-  high_score_state = std::max(high_score_state, load_high_score());
+  state.board = {};
+  state.queue.clear();
+  state.hold.reset();
+  state.phase = Phase::Playing;
+  state.score = 0;
+  state.level = 1;
+  state.lines = 0;
+  state.combo = -1;
+  state.back_to_back = false;
+  state.perfect_clear = false;
+  state.last_action_rotate = false;
+  state.t_spin = false;
+  state.hold_used = false;
+  clear_lock_delay();
+  state.high_score = std::max(state.high_score, load_high_score());
   running = true;
   ensure_queue();
   spawn_next();
-  last_fall = std::chrono::steady_clock::now();
+  state.last_fall = std::chrono::steady_clock::now();
 }
 }  // namespace
 
@@ -275,7 +386,7 @@ std::atomic_bool running = false;
 
 void init() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  high_score_state = load_high_score();
+  state.high_score = load_high_score();
   reset_game();
 }
 
@@ -287,23 +398,40 @@ void quit() {
 
 void set_high_score_path(const std::string& path) {
   std::lock_guard<std::mutex> lock(state_mutex);
-  high_score_path = path;
-  high_score_state = load_high_score();
+  state.high_score_path = path;
+  state.high_score = load_high_score();
+}
+
+void set_test_state(const Board& board, const Piece& piece) {
+  std::lock_guard<std::mutex> lock(state_mutex);
+  state.board = board;
+  state.current = piece;
+  state.phase = Phase::Playing;
+  state.hold_used = false;
+  state.last_action_rotate = false;
+  state.t_spin = false;
 }
 
 void tick(std::chrono::steady_clock::time_point now) {
   std::lock_guard<std::mutex> lock(state_mutex);
-  if (phase_state != Phase::Playing) {
-    last_fall = now;
+  if (state.phase != Phase::Playing) {
+    state.last_fall = now;
     return;
   }
-  if (now - last_fall < std::chrono::milliseconds(fall_interval_value())) {
+  if (now - state.last_fall < std::chrono::milliseconds(fall_interval_value())) {
     return;
   }
   if (!try_move(1, 0)) {
-    lock_piece();
+    if (!state.lock_started_at.has_value()) {
+      state.lock_started_at = now;
+    } else if (now - *state.lock_started_at >=
+               std::chrono::milliseconds(LOCK_DELAY_MS)) {
+      lock_piece();
+    }
+  } else {
+    clear_lock_delay();
   }
-  last_fall = now;
+  state.last_fall = now;
 }
 
 void rotate() {
@@ -323,34 +451,42 @@ void rotate_180() {
 
 void left() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  if (phase_state == Phase::Playing) {
-    try_move(0, -1);
+  if (state.phase == Phase::Playing) {
+    if (try_move(0, -1)) {
+      state.last_action_rotate = false;
+      maybe_reset_lock_delay();
+    }
   }
 }
 
 void right() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  if (phase_state == Phase::Playing) {
-    try_move(0, 1);
+  if (state.phase == Phase::Playing) {
+    if (try_move(0, 1)) {
+      state.last_action_rotate = false;
+      maybe_reset_lock_delay();
+    }
   }
 }
 
 void down() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  if (phase_state != Phase::Playing) {
+  if (state.phase != Phase::Playing) {
     return;
   }
   if (try_move(1, 0)) {
-    score_state += 1;
+    state.score += 1;
+    state.last_action_rotate = false;
+    clear_lock_delay();
   } else {
     lock_piece();
   }
-  last_fall = std::chrono::steady_clock::now();
+  state.last_fall = std::chrono::steady_clock::now();
 }
 
 void hard_drop() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  if (phase_state != Phase::Playing) {
+  if (state.phase != Phase::Playing) {
     return;
   }
   int distance = 0;
@@ -358,35 +494,35 @@ void hard_drop() {
     distance++;
   }
   lock_piece(distance * 2);
-  last_fall = std::chrono::steady_clock::now();
+  state.last_fall = std::chrono::steady_clock::now();
 }
 
 void hold() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  if (phase_state != Phase::Playing || hold_used) {
+  if (state.phase != Phase::Playing || state.hold_used) {
     return;
   }
-  const PieceType previous = current.type;
-  if (hold_state.has_value()) {
-    current = make_piece(*hold_state);
-    hold_state = previous;
-    if (collides(current)) {
-      phase_state = Phase::GameOver;
+  const PieceType previous = state.current.type;
+  if (state.hold.has_value()) {
+    state.current = make_piece(*state.hold);
+    state.hold = previous;
+    if (collides(state.current)) {
+      state.phase = Phase::GameOver;
     }
   } else {
-    hold_state = previous;
+    state.hold = previous;
     spawn_next();
   }
-  hold_used = true;
+  state.hold_used = true;
 }
 
 void toggle_pause() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  if (phase_state == Phase::Playing) {
-    phase_state = Phase::Paused;
-  } else if (phase_state == Phase::Paused) {
-    phase_state = Phase::Playing;
-    last_fall = std::chrono::steady_clock::now();
+  if (state.phase == Phase::Playing) {
+    state.phase = Phase::Paused;
+  } else if (state.phase == Phase::Paused) {
+    state.phase = Phase::Playing;
+    state.last_fall = std::chrono::steady_clock::now();
   }
 }
 
@@ -397,10 +533,11 @@ void restart() {
 
 Snapshot snapshot() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  return Snapshot{board_state, current,      ghost_piece_unlocked(), queue_state,
-                  hold_state,  phase_state, score_state,            level_state,
-                  lines_state, fall_interval_value(), !hold_used, high_score_state,
-                  combo_state, back_to_back_state};
+  return Snapshot{state.board, state.current, ghost_piece_unlocked(), state.queue,
+                  state.hold,  state.phase, state.score,            state.level,
+                  state.lines, fall_interval_value(), !state.hold_used,
+                  state.high_score, state.combo, state.back_to_back,
+                  state.perfect_clear, state.t_spin};
 }
 
 Blocks blocks_for(const Piece& piece) {

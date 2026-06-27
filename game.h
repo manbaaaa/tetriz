@@ -67,6 +67,8 @@ struct Snapshot {
   int high_score = 0;
   int combo = -1;
   bool back_to_back = false;
+  bool perfect_clear = false;
+  bool t_spin = false;
 };
 
 extern std::atomic_bool running;
@@ -75,6 +77,7 @@ void init();
 void quit();
 void tick(std::chrono::steady_clock::time_point now);
 void set_high_score_path(const std::string& path);
+void set_test_state(const Board& board, const Piece& piece);
 
 void rotate();
 void rotate_counterclockwise();
