@@ -32,6 +32,7 @@ constexpr int HIGH_SCORE_COUNT = 5;
 
 enum class PieceType { I, J, L, O, S, T, Z };
 enum class Phase { Playing, Paused, GameOver };
+enum class TSpinType { None, Mini, Full };
 
 struct Cell {
   bool filled = false;
@@ -50,6 +51,13 @@ struct Piece {
   int rotation = 0;
 };
 
+struct HighScoreEntry {
+  int score = 0;
+  int level = 1;
+  int lines = 0;
+  long long played_at = 0;
+};
+
 using Board = std::array<std::array<Cell, BOARD_WIDTH>, BOARD_HEIGHT>;
 using Blocks = std::array<Point, 4>;
 
@@ -66,11 +74,12 @@ struct Snapshot {
   int fall_interval_ms = 800;
   bool hold_available = true;
   int high_score = 0;
-  std::array<int, HIGH_SCORE_COUNT> high_scores = {};
+  std::array<HighScoreEntry, HIGH_SCORE_COUNT> high_scores = {};
   int combo = -1;
   bool back_to_back = false;
   bool perfect_clear = false;
-  bool t_spin = false;
+  TSpinType t_spin = TSpinType::None;
+  std::array<bool, BOARD_HEIGHT> recently_cleared_rows = {};
 };
 
 extern std::atomic_bool running;
@@ -82,16 +91,16 @@ void set_high_score_path(const std::string& path);
 void set_start_level(int level);
 void set_test_state(const Board& board, const Piece& piece);
 
-void rotate();
-void rotate_counterclockwise();
-void rotate_180();
-void left();
-void right();
-void down();
-void hard_drop();
-void hold();
-void toggle_pause();
-void restart();
+bool rotate();
+bool rotate_counterclockwise();
+bool rotate_180();
+bool left();
+bool right();
+bool down();
+bool hard_drop();
+bool hold();
+bool toggle_pause();
+bool restart();
 
 Snapshot snapshot();
 Blocks blocks_for(const Piece& piece);

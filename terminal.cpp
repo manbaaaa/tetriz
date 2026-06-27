@@ -15,8 +15,12 @@
 #include "./terminal.h"
 #include "./define.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/ioctl.h>
 #include <unistd.h>
+#endif
 
 #define CSI "\033["
 
@@ -37,9 +41,32 @@ void tc::hide_cursor() { std::cout << CSI << "?25l"; }
 void tc::show_cursor() { std::cout << CSI << "?25h"; }
 
 tc::Size tc::terminal_size() {
+#ifdef _WIN32
+  CONSOLE_SCREEN_BUFFER_INFO info{};
+  if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info)) {
+    return {};
+  }
+  return Size{info.srWindow.Bottom - info.srWindow.Top + 1,
+              info.srWindow.Right - info.srWindow.Left + 1};
+#else
   winsize size{};
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == -1) {
     return {};
   }
   return Size{static_cast<int>(size.ws_row), static_cast<int>(size.ws_col)};
+#endif
+}
+
+void tc::enable_virtual_terminal() {
+#ifdef _WIN32
+  const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+  if (output == INVALID_HANDLE_VALUE) {
+    return;
+  }
+  DWORD mode = 0;
+  if (!GetConsoleMode(output, &mode)) {
+    return;
+  }
+  SetConsoleMode(output, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+#endif
 }

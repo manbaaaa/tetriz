@@ -37,3 +37,6 @@ compile_commands.json
 
 # CMake files
 build
+
+# Tetriz runtime files
+.tetriz_high_score

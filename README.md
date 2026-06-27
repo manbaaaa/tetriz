@@ -11,9 +11,13 @@ Tetriz 是一个使用 C++20 编写的终端版俄罗斯方块。项目直接在
 - Ghost 影子方块，显示当前方块硬降后的落点
 - 自动下落、软降、硬降、顺/逆时针旋转、180 度旋转和 SRS 墙踢
 - Lock delay、方块落地锁定、满行清除、T-Spin、Combo、Back-to-back、Perfect Clear 和等级加速
-- 本地 Top 5 高分榜保存、状态栏展示和 Game Over 榜单展示
+- 本地 Top 5 高分榜保存分数、等级、消行数和时间，状态栏展示和 Game Over 榜单展示
 - 暂停、继续、重开和 Game Over 状态
 - 退出或 Ctrl+C 时恢复终端光标和颜色
+- Windows 终端启用 ANSI 虚拟终端模式，支持基础尺寸检测和按键读取
+- 输入线程缓冲按键，主循环统一处理命令
+- 可配置 DAS/ARR、旋转重复控制、终端 bell 音效和视觉反馈
+- 消行时短暂高亮对应行
 - 使用局部刷新和 ASCII 边框，减少终端闪烁和字符错位问题
 
 ## 游戏界面
@@ -69,7 +73,32 @@ cmake --build build
 ./build/tetriz
 ```
 
-高分榜默认保存到当前目录的 `.tetriz_high_score`，最多保留前 5 个分数。可以通过环境变量改保存路径：
+可以在当前目录创建 `.tetrizrc` 配置文件：
+
+```ini
+high_score_path = .tetriz_high_score
+start_level = 1
+hide_ghost = false
+hide_fps = false
+sound = false
+visual_feedback = false
+input_das_ms = 170
+input_arr_ms = 35
+rotation_repeat_ms = 120
+key.left = a
+key.right = d
+key.down = s
+key.rotate = w
+key.rotate_ccw = z
+key.rotate_180 = x
+key.hard_drop = space
+key.hold = c
+key.pause = p
+key.restart = r
+key.quit = q
+```
+
+高分榜默认保存到当前目录的 `.tetriz_high_score`，最多保留前 5 个分数。每条记录保存 `score level lines timestamp`，旧版纯分数文件仍可读取。也可以通过环境变量改保存路径：
 
 ```sh
 TETRIZ_HIGH_SCORE_PATH=/tmp/tetriz_high_score ./build/tetriz
@@ -86,6 +115,14 @@ TETRIZ_START_LEVEL=6 ./build/tetriz
 ```sh
 TETRIZ_HIDE_GHOST=1 TETRIZ_HIDE_FPS=1 ./build/tetriz
 ```
+
+可以打开终端 bell 音效、视觉反馈或调整重复输入节奏：
+
+```sh
+TETRIZ_SOUND=1 TETRIZ_VISUAL_FEEDBACK=1 TETRIZ_INPUT_DAS_MS=170 TETRIZ_INPUT_ARR_MS=35 TETRIZ_ROTATION_REPEAT_MS=120 ./build/tetriz
+```
+
+环境变量会覆盖 `.tetrizrc` 中的配置。旧的 `input_repeat_ms` 和 `TETRIZ_INPUT_REPEAT_MS` 仍可使用，会同时设置 DAS 和 ARR。`rotation_repeat_ms` 用于限制连续旋转输入，避免按住旋转键时过快触发。终端输入无法可靠提供按键释放事件，也没有通用硬件震动接口，因此这里基于终端自动重复事件实现首次重复延迟和后续重复间隔，并用可选终端 bell 与边框闪烁提供反馈。
 
 测试：
 
@@ -105,9 +142,9 @@ ctest --test-dir build --output-on-failure
 
 ## 实现说明
 
-项目将游戏逻辑和渲染拆开：游戏层维护棋盘、当前方块、Hold、Next 队列、分数和状态；渲染层只读取游戏快照并更新终端界面。输入线程负责监听按键并调用游戏动作，主循环按固定节奏驱动自动下落和画面刷新。
+项目将游戏逻辑、配置、控制和渲染拆开：游戏层维护棋盘、当前方块、Hold、Next 队列、分数、清行动画事件和状态；配置层读取 `.tetrizrc` 和环境变量；控制层缓冲按键输入并应用 DAS/ARR 重复控制；渲染层只读取游戏快照并更新终端界面。主循环按固定节奏处理输入命令、驱动自动下落和画面刷新。
 
-旋转规则使用 SRS 墙踢，落地后使用 lock delay 延迟锁定，并支持 T-Spin、Combo、Back-to-back 和 Perfect Clear 计分。当前 T-Spin 使用 T 方块最后动作为旋转且中心四角至少三处被占用的判定；如果要进一步接近现代俄罗斯方块规则，可以继续补充 T-Spin Mini 的细分。
+旋转规则使用 SRS 墙踢，落地后使用 lock delay 延迟锁定，并支持 T-Spin Mini/Full、Combo、Back-to-back 和 Perfect Clear 计分。T-Spin 使用 T 方块最后动作为旋转且中心四角至少三处被占用的判定，并根据前角占用区分 Mini 和 Full。
 
 ## 参考
 

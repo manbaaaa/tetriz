@@ -28,4 +28,5 @@ void reset_color();
 void hide_cursor();
 void show_cursor();
 Size terminal_size();
+void enable_virtual_terminal();
 }  // namespace tc

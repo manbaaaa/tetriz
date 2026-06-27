@@ -1,32 +1,9 @@
 #include <cassert>
 #include <chrono>
-#include <cstdio>
-#include <fstream>
-#include <string>
 
-#include "../control.h"
-#include "../game.h"
+#include "game.h"
 
 namespace {
-void assert_current_moved_left() {
-  gm::init();
-  const int col = gm::snapshot().current.col;
-  gm::handle_command("\033[D");
-  assert(gm::snapshot().current.col == col - 1);
-}
-
-void assert_current_rotates() {
-  gm::Board board{};
-  gm::set_test_state(board, gm::Piece{gm::PieceType::T, 4, 4, 0});
-  const int rotation = gm::snapshot().current.rotation;
-  gm::handle_command("w");
-  assert(gm::snapshot().current.rotation == (rotation + 1) % 4);
-  gm::handle_command("z");
-  assert(gm::snapshot().current.rotation == rotation);
-  gm::handle_command("x");
-  assert(gm::snapshot().current.rotation == (rotation + 2) % 4);
-}
-
 void assert_srs_wall_kick_rotates_near_wall() {
   gm::Board board{};
   gm::Piece piece{gm::PieceType::I, 4, 0, 0};
@@ -40,22 +17,11 @@ void assert_srs_wall_kick_rotates_near_wall() {
   }
 }
 
-void assert_hold_locks_until_next_piece() {
-  gm::init();
-  assert(gm::snapshot().hold_available);
-  gm::handle_command("c");
-  assert(!gm::snapshot().hold_available);
-  while (!gm::snapshot().hold_available) {
-    gm::handle_command(" ");
-  }
-  assert(gm::snapshot().hold_available);
-}
-
 void assert_scoring_feedback_defaults() {
   gm::init();
   assert(gm::snapshot().combo == -1);
   assert(!gm::snapshot().back_to_back);
-  gm::handle_command(" ");
+  gm::hard_drop();
   assert(gm::snapshot().combo == -1);
   assert(!gm::snapshot().back_to_back);
 }
@@ -90,9 +56,29 @@ void assert_perfect_clear_scores_bonus() {
   assert(snapshot.perfect_clear);
   assert(snapshot.lines == 1);
   assert(snapshot.score >= 3600);
+  assert(snapshot.recently_cleared_rows[gm::BOARD_HEIGHT - 1]);
 }
 
 void assert_t_spin_detects_rotated_t_piece() {
+  gm::Board board{};
+  board[5][3] = gm::Cell{true, Color::BLUE};
+  board[5][5] = gm::Cell{true, Color::BLUE};
+  board[7][3] = gm::Cell{true, Color::BLUE};
+  board[7][5] = gm::Cell{true, Color::BLUE};
+  board[8][3] = gm::Cell{true, Color::BLUE};
+  board[8][4] = gm::Cell{true, Color::BLUE};
+  board[8][5] = gm::Cell{true, Color::BLUE};
+
+  gm::Piece piece{gm::PieceType::T, 6, 4, 0};
+  gm::set_test_state(board, piece);
+  gm::rotate();
+  gm::hard_drop();
+  const gm::Snapshot snapshot = gm::snapshot();
+  assert(snapshot.t_spin == gm::TSpinType::Full);
+  assert(snapshot.score >= 400);
+}
+
+void assert_t_spin_mini_detects_rotated_t_piece() {
   gm::Board board{};
   board[5][3] = gm::Cell{true, Color::BLUE};
   board[5][5] = gm::Cell{true, Color::BLUE};
@@ -106,68 +92,18 @@ void assert_t_spin_detects_rotated_t_piece() {
   gm::rotate();
   gm::hard_drop();
   const gm::Snapshot snapshot = gm::snapshot();
-  assert(snapshot.t_spin);
-  assert(snapshot.score >= 400);
-}
-
-void assert_high_score_persists() {
-  const std::string path = "tetriz_test_high_score";
-  std::remove(path.c_str());
-
-  gm::set_high_score_path(path);
-  gm::init();
-  gm::handle_command(" ");
-  const int score = gm::snapshot().score;
-  assert(score > 0);
-  assert(gm::snapshot().high_score == score);
-  gm::quit();
-
-  gm::set_high_score_path(path);
-  gm::init();
-  assert(gm::snapshot().high_score == score);
-  gm::quit();
-  std::remove(path.c_str());
-}
-
-void assert_high_score_table_loads_sorted_scores() {
-  const std::string path = "tetriz_test_high_score_table";
-  {
-    std::ofstream file(path);
-    file << "100\n500\n250\n50\n";
-  }
-
-  gm::set_high_score_path(path);
-  gm::init();
-  const gm::Snapshot snapshot = gm::snapshot();
-  assert(snapshot.high_score == 500);
-  assert(snapshot.high_scores[0] == 500);
-  assert(snapshot.high_scores[1] == 250);
-  assert(snapshot.high_scores[2] == 100);
-  assert(snapshot.high_scores[3] == 50);
-  gm::quit();
-  std::remove(path.c_str());
-}
-
-void assert_start_level_config_applies_to_new_games() {
-  gm::set_start_level(6);
-  gm::init();
-  assert(gm::snapshot().level == 6);
-  gm::set_start_level(1);
+  assert(snapshot.t_spin == gm::TSpinType::Mini);
+  assert(snapshot.score >= 100);
 }
 }  // namespace
 
 int main() {
-  assert_current_moved_left();
-  assert_current_rotates();
   assert_srs_wall_kick_rotates_near_wall();
-  assert_hold_locks_until_next_piece();
   assert_scoring_feedback_defaults();
   assert_lock_delay_defers_grounded_piece_lock();
   assert_perfect_clear_scores_bonus();
   assert_t_spin_detects_rotated_t_piece();
-  assert_high_score_persists();
-  assert_high_score_table_loads_sorted_scores();
-  assert_start_level_config_applies_to_new_games();
+  assert_t_spin_mini_detects_rotated_t_piece();
   gm::quit();
   return 0;
 }

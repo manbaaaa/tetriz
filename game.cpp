@@ -15,9 +15,11 @@
 #include "./game.h"
 
 #include <algorithm>
+#include <ctime>
 #include <fstream>
 #include <mutex>
 #include <random>
+#include <sstream>
 #include <string>
 
 namespace gm {
@@ -35,7 +37,7 @@ struct GameState {
   Phase phase = Phase::Playing;
   int score = 0;
   int high_score = 0;
-  std::array<int, HIGH_SCORE_COUNT> high_scores = {};
+  std::array<HighScoreEntry, HIGH_SCORE_COUNT> high_scores = {};
   int start_level = 1;
   int level = 1;
   int lines = 0;
@@ -43,7 +45,8 @@ struct GameState {
   bool back_to_back = false;
   bool perfect_clear = false;
   bool last_action_rotate = false;
-  bool t_spin = false;
+  TSpinType t_spin = TSpinType::None;
+  std::array<bool, BOARD_HEIGHT> recently_cleared_rows = {};
   bool hold_used = false;
   std::chrono::steady_clock::time_point last_fall;
   std::optional<std::chrono::steady_clock::time_point> lock_started_at;
@@ -60,6 +63,7 @@ std::mt19937& rng() {
 }
 
 std::array<Point, 5> wall_kicks(PieceType type, int from, int to);
+void sort_high_scores();
 
 Blocks base_blocks(PieceType type, int rotation) {
   const int r = rotation % 4;
@@ -174,9 +178,22 @@ bool occupied_or_wall(int row, int col) {
   return row >= 0 && state.board[row][col].filled;
 }
 
-bool is_t_spin() {
+std::array<Point, 2> t_front_corners(int rotation) {
+  switch (rotation % 4) {
+    case 0:
+      return {{{-1, -1}, {-1, 1}}};
+    case 1:
+      return {{{-1, 1}, {1, 1}}};
+    case 2:
+      return {{{1, -1}, {1, 1}}};
+    default:
+      return {{{-1, -1}, {1, -1}}};
+  }
+}
+
+TSpinType detect_t_spin() {
   if (!state.last_action_rotate || state.current.type != PieceType::T) {
-    return false;
+    return TSpinType::None;
   }
 
   const int center_row = state.current.row;
@@ -188,7 +205,17 @@ bool is_t_spin() {
       occupied_corners++;
     }
   }
-  return occupied_corners >= 3;
+  if (occupied_corners < 3) {
+    return TSpinType::None;
+  }
+
+  int occupied_front_corners = 0;
+  for (const auto& corner : t_front_corners(state.current.rotation)) {
+    if (occupied_or_wall(center_row + corner.row, center_col + corner.col)) {
+      occupied_front_corners++;
+    }
+  }
+  return occupied_front_corners == 2 ? TSpinType::Full : TSpinType::Mini;
 }
 
 void clear_lock_delay() {
@@ -206,9 +233,9 @@ void maybe_reset_lock_delay() {
   }
 }
 
-void try_rotate_steps(int steps) {
+bool try_rotate_steps(int steps) {
   if (state.phase != Phase::Playing || state.current.type == PieceType::O) {
-    return;
+    return false;
   }
   Piece rotated = state.current;
   const int from = rotated.rotation;
@@ -222,9 +249,10 @@ void try_rotate_steps(int steps) {
       state.current = candidate;
       state.last_action_rotate = true;
       maybe_reset_lock_delay();
-      return;
+      return true;
     }
   }
+  return false;
 }
 
 std::array<Point, 5> wall_kicks(PieceType type, int from, int to) {
@@ -252,6 +280,7 @@ std::array<Point, 5> wall_kicks(PieceType type, int from, int to) {
 
 int clear_lines() {
   int cleared = 0;
+  state.recently_cleared_rows = {};
   for (int row = BOARD_HEIGHT - 1; row >= 0; row--) {
     bool full = true;
     for (const auto& cell : state.board[row]) {
@@ -264,6 +293,7 @@ int clear_lines() {
       continue;
     }
     cleared++;
+    state.recently_cleared_rows[row] = true;
     for (int move_row = row; move_row > 0; move_row--) {
       state.board[move_row] = state.board[move_row - 1];
     }
@@ -284,14 +314,22 @@ bool board_empty() {
   return true;
 }
 
-void apply_score(int cleared, int drop_bonus, bool t_spin) {
+void apply_score(int cleared, int drop_bonus, TSpinType t_spin) {
   static const std::array<int, 5> line_scores = {0, 100, 300, 500, 800};
   static const std::array<int, 4> t_spin_scores = {400, 800, 1200, 1600};
+  static const std::array<int, 3> t_spin_mini_scores = {100, 200, 400};
   state.score += drop_bonus;
   state.t_spin = t_spin;
+  const bool is_t_spin = t_spin != TSpinType::None;
   if (cleared > 0) {
-    const bool difficult_clear = cleared == 4 || t_spin;
-    const int base_score = t_spin ? t_spin_scores[cleared] : line_scores[cleared];
+    const bool difficult_clear =
+        cleared == 4 || t_spin == TSpinType::Full ||
+        (t_spin == TSpinType::Mini && cleared > 0);
+    const int base_score =
+        t_spin == TSpinType::Full
+            ? t_spin_scores[cleared]
+            : (t_spin == TSpinType::Mini ? t_spin_mini_scores[cleared]
+                                         : line_scores[cleared]);
     int line_score = base_score * state.level;
     if (difficult_clear && state.back_to_back) {
       line_score += line_score / 2;
@@ -309,39 +347,64 @@ void apply_score(int cleared, int drop_bonus, bool t_spin) {
       state.score += 3500 * state.level;
     }
   } else {
+    if (is_t_spin) {
+      state.score += (t_spin == TSpinType::Mini ? 100 : 400) * state.level;
+    }
     state.combo = -1;
     state.perfect_clear = false;
   }
   state.high_score = std::max(state.high_score, state.score);
-  state.high_scores.front() = std::max(state.high_scores.front(), state.high_score);
-  std::sort(state.high_scores.begin(), state.high_scores.end(), std::greater<int>());
+  state.high_scores.front().score =
+      std::max(state.high_scores.front().score, state.high_score);
+  sort_high_scores();
 }
 
-std::array<int, HIGH_SCORE_COUNT> load_high_scores() {
+void sort_high_scores() {
+  std::sort(state.high_scores.begin(), state.high_scores.end(),
+            [](const HighScoreEntry& left, const HighScoreEntry& right) {
+              return left.score > right.score;
+            });
+}
+
+std::array<HighScoreEntry, HIGH_SCORE_COUNT> load_high_scores() {
   std::ifstream file(state.high_score_path);
-  std::array<int, HIGH_SCORE_COUNT> scores = {};
-  int value = 0;
+  std::array<HighScoreEntry, HIGH_SCORE_COUNT> scores = {};
+  std::string line;
   int index = 0;
-  while (index < HIGH_SCORE_COUNT && file >> value) {
-    scores[index] = std::max(0, value);
+  while (index < HIGH_SCORE_COUNT && std::getline(file, line)) {
+    std::istringstream stream(line);
+    HighScoreEntry entry;
+    if (!(stream >> entry.score)) {
+      continue;
+    }
+    stream >> entry.level >> entry.lines >> entry.played_at;
+    entry.score = std::max(0, entry.score);
+    entry.level = std::max(1, entry.level);
+    entry.lines = std::max(0, entry.lines);
+    scores[index] = entry;
     index++;
   }
-  std::sort(scores.begin(), scores.end(), std::greater<int>());
+  std::sort(scores.begin(), scores.end(),
+            [](const HighScoreEntry& left, const HighScoreEntry& right) {
+              return left.score > right.score;
+            });
   return scores;
 }
 
 void refresh_high_score() {
-  state.high_score = std::max(state.high_score, state.high_scores.front());
+  state.high_score = std::max(state.high_score, state.high_scores.front().score);
 }
 
 void record_score() {
   if (state.score <= 0) {
     return;
   }
-  state.high_scores[HIGH_SCORE_COUNT - 1] =
-      std::max(state.high_scores[HIGH_SCORE_COUNT - 1], state.score);
-  std::sort(state.high_scores.begin(), state.high_scores.end(),
-            std::greater<int>());
+  HighScoreEntry entry{state.score, state.level, state.lines,
+                       static_cast<long long>(std::time(nullptr))};
+  if (entry.score > state.high_scores[HIGH_SCORE_COUNT - 1].score) {
+    state.high_scores[HIGH_SCORE_COUNT - 1] = entry;
+  }
+  sort_high_scores();
   refresh_high_score();
 }
 
@@ -352,9 +415,10 @@ void save_high_score() {
   record_score();
   std::ofstream file(state.high_score_path, std::ios::trunc);
   if (file) {
-    for (const int score : state.high_scores) {
-      if (score > 0) {
-        file << score << '\n';
+    for (const auto& entry : state.high_scores) {
+      if (entry.score > 0) {
+        file << entry.score << ' ' << entry.level << ' ' << entry.lines << ' '
+             << entry.played_at << '\n';
       }
     }
   }
@@ -380,7 +444,7 @@ void lock_piece(int drop_bonus = 0) {
     }
   }
   const int cleared = clear_lines();
-  apply_score(cleared, drop_bonus, is_t_spin());
+  apply_score(cleared, drop_bonus, detect_t_spin());
   clear_lock_delay();
   state.last_action_rotate = false;
   spawn_next();
@@ -400,12 +464,13 @@ void reset_game() {
   state.back_to_back = false;
   state.perfect_clear = false;
   state.last_action_rotate = false;
-  state.t_spin = false;
+  state.t_spin = TSpinType::None;
+  state.recently_cleared_rows = {};
   state.hold_used = false;
   clear_lock_delay();
   state.high_scores = load_high_scores();
-  state.high_score = std::max(state.high_score, state.high_scores.front());
-  state.high_scores.front() = state.high_score;
+  state.high_score = std::max(state.high_score, state.high_scores.front().score);
+  state.high_scores.front().score = state.high_score;
   running = true;
   ensure_queue();
   spawn_next();
@@ -418,7 +483,7 @@ std::atomic_bool running = false;
 void init() {
   std::lock_guard<std::mutex> lock(state_mutex);
   state.high_scores = load_high_scores();
-  state.high_score = state.high_scores.front();
+  state.high_score = state.high_scores.front().score;
   reset_game();
 }
 
@@ -432,7 +497,7 @@ void set_high_score_path(const std::string& path) {
   std::lock_guard<std::mutex> lock(state_mutex);
   state.high_score_path = path;
   state.high_scores = load_high_scores();
-  state.high_score = state.high_scores.front();
+  state.high_score = state.high_scores.front().score;
 }
 
 void set_start_level(int level) {
@@ -447,7 +512,8 @@ void set_test_state(const Board& board, const Piece& piece) {
   state.phase = Phase::Playing;
   state.hold_used = false;
   state.last_action_rotate = false;
-  state.t_spin = false;
+  state.t_spin = TSpinType::None;
+  state.recently_cleared_rows = {};
   refresh_high_score();
 }
 
@@ -473,60 +539,67 @@ void tick(std::chrono::steady_clock::time_point now) {
   state.last_fall = now;
 }
 
-void rotate() {
+bool rotate() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  try_rotate_steps(1);
+  return try_rotate_steps(1);
 }
 
-void rotate_counterclockwise() {
+bool rotate_counterclockwise() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  try_rotate_steps(-1);
+  return try_rotate_steps(-1);
 }
 
-void rotate_180() {
+bool rotate_180() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  try_rotate_steps(2);
+  return try_rotate_steps(2);
 }
 
-void left() {
+bool left() {
   std::lock_guard<std::mutex> lock(state_mutex);
   if (state.phase == Phase::Playing) {
     if (try_move(0, -1)) {
       state.last_action_rotate = false;
       maybe_reset_lock_delay();
+      return true;
     }
   }
+  return false;
 }
 
-void right() {
+bool right() {
   std::lock_guard<std::mutex> lock(state_mutex);
   if (state.phase == Phase::Playing) {
     if (try_move(0, 1)) {
       state.last_action_rotate = false;
       maybe_reset_lock_delay();
+      return true;
     }
   }
+  return false;
 }
 
-void down() {
+bool down() {
   std::lock_guard<std::mutex> lock(state_mutex);
   if (state.phase != Phase::Playing) {
-    return;
+    return false;
   }
   if (try_move(1, 0)) {
     state.score += 1;
     state.last_action_rotate = false;
     clear_lock_delay();
+    state.last_fall = std::chrono::steady_clock::now();
+    return true;
   } else {
     lock_piece();
   }
   state.last_fall = std::chrono::steady_clock::now();
+  return true;
 }
 
-void hard_drop() {
+bool hard_drop() {
   std::lock_guard<std::mutex> lock(state_mutex);
   if (state.phase != Phase::Playing) {
-    return;
+    return false;
   }
   int distance = 0;
   while (try_move(1, 0)) {
@@ -534,12 +607,13 @@ void hard_drop() {
   }
   lock_piece(distance * 2);
   state.last_fall = std::chrono::steady_clock::now();
+  return true;
 }
 
-void hold() {
+bool hold() {
   std::lock_guard<std::mutex> lock(state_mutex);
   if (state.phase != Phase::Playing || state.hold_used) {
-    return;
+    return false;
   }
   const PieceType previous = state.current.type;
   if (state.hold.has_value()) {
@@ -553,21 +627,26 @@ void hold() {
     spawn_next();
   }
   state.hold_used = true;
+  return true;
 }
 
-void toggle_pause() {
+bool toggle_pause() {
   std::lock_guard<std::mutex> lock(state_mutex);
   if (state.phase == Phase::Playing) {
     state.phase = Phase::Paused;
+    return true;
   } else if (state.phase == Phase::Paused) {
     state.phase = Phase::Playing;
     state.last_fall = std::chrono::steady_clock::now();
+    return true;
   }
+  return false;
 }
 
-void restart() {
+bool restart() {
   std::lock_guard<std::mutex> lock(state_mutex);
   reset_game();
+  return true;
 }
 
 Snapshot snapshot() {
@@ -576,7 +655,7 @@ Snapshot snapshot() {
                   state.hold,  state.phase, state.score,            state.level,
                   state.lines, fall_interval_value(), !state.hold_used,
                   state.high_score, state.high_scores, state.combo, state.back_to_back,
-                  state.perfect_clear, state.t_spin};
+                  state.perfect_clear, state.t_spin, state.recently_cleared_rows};
 }
 
 Blocks blocks_for(const Piece& piece) {

@@ -13,25 +13,15 @@
 // limitations under the License.
 
 #include "./control.h"
+#include "./config.h"
 #include "./draw.h"
 #include "./game.h"
 #include "./terminal.h"
 #include "./utils.h"
 
 #include <csignal>
-#include <cstdlib>
-#include <string>
 
 namespace {
-bool env_enabled(const char* name) {
-  const char* value = std::getenv(name);
-  if (value == nullptr) {
-    return false;
-  }
-  return std::string(value) != "0" && std::string(value) != "false" &&
-         std::string(value) != "FALSE";
-}
-
 class TerminalGuard {
  public:
   TerminalGuard() { tc::hide_cursor(); }
@@ -55,15 +45,31 @@ void handle_signal(int) {
 }  // namespace
 
 void init() {
-  if (const char* high_score_path = std::getenv("TETRIZ_HIGH_SCORE_PATH")) {
-    gm::set_high_score_path(high_score_path);
-  }
-  if (const char* start_level = std::getenv("TETRIZ_START_LEVEL")) {
-    gm::set_start_level(std::atoi(start_level));
-  }
+  tc::enable_virtual_terminal();
+  cfg::Config config = cfg::load_file(".tetrizrc");
+  cfg::apply_env_overrides(&config);
+  gm::set_high_score_path(config.high_score_path);
+  gm::set_start_level(config.start_level);
+  gm::set_sound_enabled(config.sound);
+  gm::set_visual_feedback_enabled(config.visual_feedback);
+  gm::set_input_timing(config.input_das_ms, config.input_arr_ms);
+  gm::set_rotation_repeat_ms(config.rotation_repeat_ms);
+  gm::configure_keys(gm::KeyBindings{
+      config.keys.left,
+      config.keys.right,
+      config.keys.down,
+      config.keys.rotate,
+      config.keys.rotate_ccw,
+      config.keys.rotate_180,
+      config.keys.hard_drop,
+      config.keys.hold,
+      config.keys.pause,
+      config.keys.restart,
+      config.keys.quit,
+  });
   dw::set_display_options(dw::DisplayOptions{
-      !env_enabled("TETRIZ_HIDE_GHOST"),
-      !env_enabled("TETRIZ_HIDE_FPS"),
+      !config.hide_ghost,
+      !config.hide_fps,
   });
   gm::init();
   gm::start_listener();
@@ -73,6 +79,7 @@ void loop() {
   auto last_render = std::chrono::steady_clock::time_point{};
   while (gm::running.load()) {
     const auto now = std::chrono::steady_clock::now();
+    gm::process_pending_commands();
     gm::tick(now);
     if (now - last_render >= std::chrono::milliseconds(100)) {
       dw::render(ut::fps());

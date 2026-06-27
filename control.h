@@ -17,8 +17,31 @@
 #include <string>
 
 namespace gm {
+struct KeyBindings {
+  char left = '\0';
+  char right = '\0';
+  char down = '\0';
+  char rotate = '\0';
+  char rotate_counterclockwise = '\0';
+  char rotate_180 = '\0';
+  char hard_drop = '\0';
+  char hold = '\0';
+  char pause = '\0';
+  char restart = '\0';
+  char quit = '\0';
+};
+
+void set_sound_enabled(bool enabled);
+void set_visual_feedback_enabled(bool enabled);
+bool consume_feedback_pulse();
+void set_input_timing(int das_ms, int arr_ms);
+void set_rotation_repeat_ms(int repeat_ms);
+void set_input_repeat_ms(int repeat_ms);
+void configure_keys(const KeyBindings& keys);
 std::string read_key();
 void handle_command(const std::string& command);
+void process_pending_commands();
+void queue_command_for_test(const std::string& command);
 void key_event();
 void start_listener();
 
