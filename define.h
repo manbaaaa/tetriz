@@ -14,20 +14,29 @@
 
 #pragma once
 
+#include <cstdio>
 #include <termios.h>
 
+#include <array>
+#include <atomic>
 #include <chrono>
 #include <codecvt>
+#include <deque>
 #include <functional>
 #include <iostream>
 #include <locale>
 #include <map>
+#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
 
 #define KEY_Q 'q'
+#define KEY_R 'r'
 #define KEY_W 'w'
 #define KEY_A 'a'
 #define KEY_S 's'
 #define KEY_D 'd'
+#define KEY_C 'c'
+#define KEY_P 'p'
+#define KEY_SPACE ' '
