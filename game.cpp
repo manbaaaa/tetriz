@@ -25,6 +25,7 @@ namespace {
 std::mutex state_mutex;
 constexpr int LOCK_DELAY_MS = 500;
 constexpr int MAX_LOCK_RESETS = 15;
+constexpr int MAX_START_LEVEL = 15;
 
 struct GameState {
   Board board;
@@ -34,6 +35,8 @@ struct GameState {
   Phase phase = Phase::Playing;
   int score = 0;
   int high_score = 0;
+  std::array<int, HIGH_SCORE_COUNT> high_scores = {};
+  int start_level = 1;
   int level = 1;
   int lines = 0;
   int combo = -1;
@@ -310,24 +313,50 @@ void apply_score(int cleared, int drop_bonus, bool t_spin) {
     state.perfect_clear = false;
   }
   state.high_score = std::max(state.high_score, state.score);
+  state.high_scores.front() = std::max(state.high_scores.front(), state.high_score);
+  std::sort(state.high_scores.begin(), state.high_scores.end(), std::greater<int>());
 }
 
-int load_high_score() {
+std::array<int, HIGH_SCORE_COUNT> load_high_scores() {
   std::ifstream file(state.high_score_path);
-  int loaded = 0;
-  if (file >> loaded) {
-    return std::max(0, loaded);
+  std::array<int, HIGH_SCORE_COUNT> scores = {};
+  int value = 0;
+  int index = 0;
+  while (index < HIGH_SCORE_COUNT && file >> value) {
+    scores[index] = std::max(0, value);
+    index++;
   }
-  return 0;
+  std::sort(scores.begin(), scores.end(), std::greater<int>());
+  return scores;
+}
+
+void refresh_high_score() {
+  state.high_score = std::max(state.high_score, state.high_scores.front());
+}
+
+void record_score() {
+  if (state.score <= 0) {
+    return;
+  }
+  state.high_scores[HIGH_SCORE_COUNT - 1] =
+      std::max(state.high_scores[HIGH_SCORE_COUNT - 1], state.score);
+  std::sort(state.high_scores.begin(), state.high_scores.end(),
+            std::greater<int>());
+  refresh_high_score();
 }
 
 void save_high_score() {
   if (state.high_score_path.empty()) {
     return;
   }
+  record_score();
   std::ofstream file(state.high_score_path, std::ios::trunc);
   if (file) {
-    file << state.high_score << '\n';
+    for (const int score : state.high_scores) {
+      if (score > 0) {
+        file << score << '\n';
+      }
+    }
   }
 }
 
@@ -365,7 +394,7 @@ void reset_game() {
   state.hold.reset();
   state.phase = Phase::Playing;
   state.score = 0;
-  state.level = 1;
+  state.level = state.start_level;
   state.lines = 0;
   state.combo = -1;
   state.back_to_back = false;
@@ -374,7 +403,9 @@ void reset_game() {
   state.t_spin = false;
   state.hold_used = false;
   clear_lock_delay();
-  state.high_score = std::max(state.high_score, load_high_score());
+  state.high_scores = load_high_scores();
+  state.high_score = std::max(state.high_score, state.high_scores.front());
+  state.high_scores.front() = state.high_score;
   running = true;
   ensure_queue();
   spawn_next();
@@ -386,7 +417,8 @@ std::atomic_bool running = false;
 
 void init() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  state.high_score = load_high_score();
+  state.high_scores = load_high_scores();
+  state.high_score = state.high_scores.front();
   reset_game();
 }
 
@@ -399,7 +431,13 @@ void quit() {
 void set_high_score_path(const std::string& path) {
   std::lock_guard<std::mutex> lock(state_mutex);
   state.high_score_path = path;
-  state.high_score = load_high_score();
+  state.high_scores = load_high_scores();
+  state.high_score = state.high_scores.front();
+}
+
+void set_start_level(int level) {
+  std::lock_guard<std::mutex> lock(state_mutex);
+  state.start_level = std::clamp(level, 1, MAX_START_LEVEL);
 }
 
 void set_test_state(const Board& board, const Piece& piece) {
@@ -410,6 +448,7 @@ void set_test_state(const Board& board, const Piece& piece) {
   state.hold_used = false;
   state.last_action_rotate = false;
   state.t_spin = false;
+  refresh_high_score();
 }
 
 void tick(std::chrono::steady_clock::time_point now) {
@@ -536,7 +575,7 @@ Snapshot snapshot() {
   return Snapshot{state.board, state.current, ghost_piece_unlocked(), state.queue,
                   state.hold,  state.phase, state.score,            state.level,
                   state.lines, fall_interval_value(), !state.hold_used,
-                  state.high_score, state.combo, state.back_to_back,
+                  state.high_score, state.high_scores, state.combo, state.back_to_back,
                   state.perfect_clear, state.t_spin};
 }
 

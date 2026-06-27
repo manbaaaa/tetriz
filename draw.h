@@ -19,6 +19,12 @@
 #include "./game.h"
 
 namespace dw {
+struct DisplayOptions {
+  bool show_ghost = true;
+  bool show_fps = true;
+};
+
+void set_display_options(DisplayOptions options);
 void window(int top, int left, int width, int height, std::string title);
 void render(int fps);
 }  // namespace dw

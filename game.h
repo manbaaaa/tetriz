@@ -28,6 +28,7 @@ namespace gm {
 constexpr int BOARD_WIDTH = 10;
 constexpr int BOARD_HEIGHT = 20;
 constexpr int PREVIEW_COUNT = 3;
+constexpr int HIGH_SCORE_COUNT = 5;
 
 enum class PieceType { I, J, L, O, S, T, Z };
 enum class Phase { Playing, Paused, GameOver };
@@ -65,6 +66,7 @@ struct Snapshot {
   int fall_interval_ms = 800;
   bool hold_available = true;
   int high_score = 0;
+  std::array<int, HIGH_SCORE_COUNT> high_scores = {};
   int combo = -1;
   bool back_to_back = false;
   bool perfect_clear = false;
@@ -77,6 +79,7 @@ void init();
 void quit();
 void tick(std::chrono::steady_clock::time_point now);
 void set_high_score_path(const std::string& path);
+void set_start_level(int level);
 void set_test_state(const Board& board, const Piece& piece);
 
 void rotate();

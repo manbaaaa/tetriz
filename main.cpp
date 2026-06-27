@@ -20,8 +20,18 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <string>
 
 namespace {
+bool env_enabled(const char* name) {
+  const char* value = std::getenv(name);
+  if (value == nullptr) {
+    return false;
+  }
+  return std::string(value) != "0" && std::string(value) != "false" &&
+         std::string(value) != "FALSE";
+}
+
 class TerminalGuard {
  public:
   TerminalGuard() { tc::hide_cursor(); }
@@ -48,6 +58,13 @@ void init() {
   if (const char* high_score_path = std::getenv("TETRIZ_HIGH_SCORE_PATH")) {
     gm::set_high_score_path(high_score_path);
   }
+  if (const char* start_level = std::getenv("TETRIZ_START_LEVEL")) {
+    gm::set_start_level(std::atoi(start_level));
+  }
+  dw::set_display_options(dw::DisplayOptions{
+      !env_enabled("TETRIZ_HIDE_GHOST"),
+      !env_enabled("TETRIZ_HIDE_FPS"),
+  });
   gm::init();
   gm::start_listener();
 }

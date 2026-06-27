@@ -32,6 +32,7 @@ constexpr int NEXT_TOP = 1;
 constexpr int NEXT_LEFT = 27;
 constexpr int REQUIRED_ROWS = 22;
 constexpr int REQUIRED_COLS = 70;
+DisplayOptions display_options;
 
 void block(int row, int col, Color color) {
   tc::move_to(row, ut::block2col(col));
@@ -99,10 +100,12 @@ void draw_board(const gm::Snapshot& snapshot) {
       last_cells = {};
 
   std::array<std::array<bool, gm::BOARD_WIDTH>, gm::BOARD_HEIGHT> ghost = {};
-  for (const auto& point : gm::blocks_for(snapshot.ghost)) {
-    if (point.row >= 0 && point.row < gm::BOARD_HEIGHT && point.col >= 0 &&
-        point.col < gm::BOARD_WIDTH) {
-      ghost[point.row][point.col] = true;
+  if (display_options.show_ghost) {
+    for (const auto& point : gm::blocks_for(snapshot.ghost)) {
+      if (point.row >= 0 && point.row < gm::BOARD_HEIGHT && point.col >= 0 &&
+          point.col < gm::BOARD_WIDTH) {
+        ghost[point.row][point.col] = true;
+      }
     }
   }
 
@@ -123,7 +126,7 @@ void draw_board(const gm::Snapshot& snapshot) {
         cell_key = "a" + std::to_string(static_cast<int>(gm::piece_color(snapshot.current.type)));
       } else if (snapshot.board[row][col].filled) {
         cell_key = "f" + std::to_string(static_cast<int>(snapshot.board[row][col].color));
-      } else if (ghost[row][col]) {
+      } else if (display_options.show_ghost && ghost[row][col]) {
         cell_key = "g";
       } else {
         cell_key = "e";
@@ -138,7 +141,7 @@ void draw_board(const gm::Snapshot& snapshot) {
         block(screen_row, screen_col, gm::piece_color(snapshot.current.type));
       } else if (snapshot.board[row][col].filled) {
         block(screen_row, screen_col, snapshot.board[row][col].color);
-      } else if (ghost[row][col]) {
+      } else if (display_options.show_ghost && ghost[row][col]) {
         ghost_block(screen_row, screen_col);
       } else {
         empty_block(screen_row, screen_col);
@@ -214,7 +217,7 @@ void draw_status(const gm::Snapshot& snapshot, int fps) {
       std::string("B2B   ") + (snapshot.back_to_back ? "on" : "off"),
       std::string("PC    ") + (snapshot.perfect_clear ? "yes" : "no"),
       std::string("TSpin ") + (snapshot.t_spin ? "yes" : "no"),
-      "FPS   " + std::to_string(fps),
+      display_options.show_fps ? "FPS   " + std::to_string(fps) : "",
       phase_label(snapshot.phase),
   };
   static std::array<std::string, 9> last_lines = {};
@@ -239,7 +242,8 @@ void draw_info() {
 
 void draw_overlay(gm::Phase phase) {
   static std::optional<gm::Phase> last_phase;
-  if (last_phase.has_value() && *last_phase == phase) {
+  const gm::Snapshot snapshot = gm::snapshot();
+  if (last_phase.has_value() && *last_phase == phase && phase != gm::Phase::GameOver) {
     return;
   }
   last_phase = phase;
@@ -247,12 +251,23 @@ void draw_overlay(gm::Phase phase) {
   if (phase == gm::Phase::Playing) {
     text_fixed(BOARD_TOP + 9, BOARD_LEFT + 3, "", 12);
     text_fixed(BOARD_TOP + 11, BOARD_LEFT + 2, "", 14);
+    for (int i = 0; i < 3; i++) {
+      text_fixed(BOARD_TOP + 13 + i, BOARD_LEFT + 2, "", 14);
+    }
     return;
   }
   const std::string line1 = phase == gm::Phase::Paused ? "PAUSED" : "GAME OVER";
   const std::string line2 = phase == gm::Phase::Paused ? "P to resume" : "R to restart";
   text_fixed(BOARD_TOP + 9, BOARD_LEFT + 3, line1, 12);
   text_fixed(BOARD_TOP + 11, BOARD_LEFT + 2, line2, 14);
+  if (phase == gm::Phase::GameOver) {
+    for (int i = 0; i < 3; i++) {
+      text_fixed(BOARD_TOP + 13 + i, BOARD_LEFT + 2,
+                 "#" + std::to_string(i + 1) + " " +
+                     std::to_string(snapshot.high_scores[i]),
+                 14);
+    }
+  }
 }
 }  // namespace
 
@@ -278,6 +293,10 @@ void window(int top, int left, int width, int height, std::string title) {
 
   tc::move_to(top, screen_col + (total_width - title.length()) / 2);
   std::cout << title;
+}
+
+void set_display_options(DisplayOptions options) {
+  display_options = options;
 }
 
 void render(int fps) {

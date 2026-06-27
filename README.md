@@ -11,7 +11,7 @@ Tetriz 是一个使用 C++20 编写的终端版俄罗斯方块。项目直接在
 - Ghost 影子方块，显示当前方块硬降后的落点
 - 自动下落、软降、硬降、顺/逆时针旋转、180 度旋转和 SRS 墙踢
 - Lock delay、方块落地锁定、满行清除、T-Spin、Combo、Back-to-back、Perfect Clear 和等级加速
-- 本地最高分保存和状态栏展示
+- 本地 Top 5 高分榜保存、状态栏展示和 Game Over 榜单展示
 - 暂停、继续、重开和 Game Over 状态
 - 退出或 Ctrl+C 时恢复终端光标和颜色
 - 使用局部刷新和 ASCII 边框，减少终端闪烁和字符错位问题
@@ -69,10 +69,22 @@ cmake --build build
 ./build/tetriz
 ```
 
-高分默认保存到当前目录的 `.tetriz_high_score`。可以通过环境变量改保存路径：
+高分榜默认保存到当前目录的 `.tetriz_high_score`，最多保留前 5 个分数。可以通过环境变量改保存路径：
 
 ```sh
 TETRIZ_HIGH_SCORE_PATH=/tmp/tetriz_high_score ./build/tetriz
+```
+
+可以通过环境变量设置起始等级：
+
+```sh
+TETRIZ_START_LEVEL=6 ./build/tetriz
+```
+
+可以通过环境变量隐藏 Ghost 或 FPS：
+
+```sh
+TETRIZ_HIDE_GHOST=1 TETRIZ_HIDE_FPS=1 ./build/tetriz
 ```
 
 测试：

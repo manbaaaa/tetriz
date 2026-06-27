@@ -1,6 +1,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdio>
+#include <fstream>
 #include <string>
 
 #include "../control.h"
@@ -127,6 +128,32 @@ void assert_high_score_persists() {
   gm::quit();
   std::remove(path.c_str());
 }
+
+void assert_high_score_table_loads_sorted_scores() {
+  const std::string path = "tetriz_test_high_score_table";
+  {
+    std::ofstream file(path);
+    file << "100\n500\n250\n50\n";
+  }
+
+  gm::set_high_score_path(path);
+  gm::init();
+  const gm::Snapshot snapshot = gm::snapshot();
+  assert(snapshot.high_score == 500);
+  assert(snapshot.high_scores[0] == 500);
+  assert(snapshot.high_scores[1] == 250);
+  assert(snapshot.high_scores[2] == 100);
+  assert(snapshot.high_scores[3] == 50);
+  gm::quit();
+  std::remove(path.c_str());
+}
+
+void assert_start_level_config_applies_to_new_games() {
+  gm::set_start_level(6);
+  gm::init();
+  assert(gm::snapshot().level == 6);
+  gm::set_start_level(1);
+}
 }  // namespace
 
 int main() {
@@ -139,6 +166,8 @@ int main() {
   assert_perfect_clear_scores_bonus();
   assert_t_spin_detects_rotated_t_piece();
   assert_high_score_persists();
+  assert_high_score_table_loads_sorted_scores();
+  assert_start_level_config_applies_to_new_games();
   gm::quit();
   return 0;
 }
