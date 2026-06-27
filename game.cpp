@@ -15,8 +15,10 @@
 #include "./game.h"
 
 #include <algorithm>
+#include <fstream>
 #include <mutex>
 #include <random>
+#include <string>
 
 namespace gm {
 namespace {
@@ -27,10 +29,14 @@ std::deque<PieceType> queue_state;
 std::optional<PieceType> hold_state;
 Phase phase_state = Phase::Playing;
 int score_state = 0;
+int high_score_state = 0;
 int level_state = 1;
 int lines_state = 0;
+int combo_state = -1;
+bool back_to_back_state = false;
 bool hold_used = false;
 std::chrono::steady_clock::time_point last_fall;
+std::string high_score_path = ".tetriz_high_score";
 
 std::mt19937& rng() {
   static std::random_device seed;
@@ -182,9 +188,41 @@ void apply_score(int cleared, int drop_bonus) {
   static const std::array<int, 5> line_scores = {0, 100, 300, 500, 800};
   score_state += drop_bonus;
   if (cleared > 0) {
-    score_state += line_scores[cleared] * level_state;
+    const bool difficult_clear = cleared == 4;
+    int line_score = line_scores[cleared] * level_state;
+    if (difficult_clear && back_to_back_state) {
+      line_score += line_score / 2;
+    }
+    combo_state++;
+    if (combo_state > 0) {
+      line_score += combo_state * 50 * level_state;
+    }
+    score_state += line_score;
     lines_state += cleared;
     level_state = lines_state / 10 + 1;
+    back_to_back_state = difficult_clear;
+  } else {
+    combo_state = -1;
+  }
+  high_score_state = std::max(high_score_state, score_state);
+}
+
+int load_high_score() {
+  std::ifstream file(high_score_path);
+  int loaded = 0;
+  if (file >> loaded) {
+    return std::max(0, loaded);
+  }
+  return 0;
+}
+
+void save_high_score() {
+  if (high_score_path.empty()) {
+    return;
+  }
+  std::ofstream file(high_score_path, std::ios::trunc);
+  if (file) {
+    file << high_score_state << '\n';
   }
 }
 
@@ -222,7 +260,10 @@ void reset_game() {
   score_state = 0;
   level_state = 1;
   lines_state = 0;
+  combo_state = -1;
+  back_to_back_state = false;
   hold_used = false;
+  high_score_state = std::max(high_score_state, load_high_score());
   running = true;
   ensure_queue();
   spawn_next();
@@ -234,11 +275,20 @@ std::atomic_bool running = false;
 
 void init() {
   std::lock_guard<std::mutex> lock(state_mutex);
+  high_score_state = load_high_score();
   reset_game();
 }
 
 void quit() {
+  std::lock_guard<std::mutex> lock(state_mutex);
+  save_high_score();
   running = false;
+}
+
+void set_high_score_path(const std::string& path) {
+  std::lock_guard<std::mutex> lock(state_mutex);
+  high_score_path = path;
+  high_score_state = load_high_score();
 }
 
 void tick(std::chrono::steady_clock::time_point now) {
@@ -349,7 +399,8 @@ Snapshot snapshot() {
   std::lock_guard<std::mutex> lock(state_mutex);
   return Snapshot{board_state, current,      ghost_piece_unlocked(), queue_state,
                   hold_state,  phase_state, score_state,            level_state,
-                  lines_state, fall_interval_value(), !hold_used};
+                  lines_state, fall_interval_value(), !hold_used, high_score_state,
+                  combo_state, back_to_back_state};
 }
 
 Blocks blocks_for(const Piece& piece) {

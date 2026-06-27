@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstdio>
 #include <string>
 
 #include "../control.h"
@@ -33,12 +34,42 @@ void assert_hold_locks_until_next_piece() {
   }
   assert(gm::snapshot().hold_available);
 }
+
+void assert_scoring_feedback_defaults() {
+  gm::init();
+  assert(gm::snapshot().combo == -1);
+  assert(!gm::snapshot().back_to_back);
+  gm::handle_command(" ");
+  assert(gm::snapshot().combo == -1);
+  assert(!gm::snapshot().back_to_back);
+}
+
+void assert_high_score_persists() {
+  const std::string path = "tetriz_test_high_score";
+  std::remove(path.c_str());
+
+  gm::set_high_score_path(path);
+  gm::init();
+  gm::handle_command(" ");
+  const int score = gm::snapshot().score;
+  assert(score > 0);
+  assert(gm::snapshot().high_score == score);
+  gm::quit();
+
+  gm::set_high_score_path(path);
+  gm::init();
+  assert(gm::snapshot().high_score == score);
+  gm::quit();
+  std::remove(path.c_str());
+}
 }  // namespace
 
 int main() {
   assert_current_moved_left();
   assert_current_rotates();
   assert_hold_locks_until_next_piece();
+  assert_scoring_feedback_defaults();
+  assert_high_score_persists();
   gm::quit();
   return 0;
 }

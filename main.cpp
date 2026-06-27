@@ -19,6 +19,7 @@
 #include "./utils.h"
 
 #include <csignal>
+#include <cstdlib>
 
 namespace {
 class TerminalGuard {
@@ -44,6 +45,9 @@ void handle_signal(int) {
 }  // namespace
 
 void init() {
+  if (const char* high_score_path = std::getenv("TETRIZ_HIGH_SCORE_PATH")) {
+    gm::set_high_score_path(high_score_path);
+  }
   gm::init();
   gm::start_listener();
 }
