@@ -30,6 +30,8 @@ constexpr int STATUS_TOP = 8;
 constexpr int STATUS_LEFT = 1;
 constexpr int NEXT_TOP = 1;
 constexpr int NEXT_LEFT = 27;
+constexpr int REQUIRED_ROWS = 22;
+constexpr int REQUIRED_COLS = 70;
 
 void block(int row, int col, Color color) {
   tc::move_to(row, ut::block2col(col));
@@ -60,6 +62,22 @@ void text_fixed(int row, int col, const std::string& value, int width) {
   std::string padded = value.substr(0, width);
   padded.append(width - padded.length(), ' ');
   text(row, col, padded);
+}
+
+bool terminal_too_small(tc::Size size) {
+  return size.rows > 0 && size.cols > 0 &&
+         (size.rows < REQUIRED_ROWS || size.cols < REQUIRED_COLS);
+}
+
+void draw_small_terminal_message(tc::Size size) {
+  tc::clear_screen();
+  tc::move_to(1, 1);
+  std::cout << "Tetriz needs at least " << REQUIRED_COLS << "x" << REQUIRED_ROWS
+            << ".";
+  tc::move_to(2, 1);
+  std::cout << "Current terminal: " << size.cols << "x" << size.rows << ".";
+  tc::move_to(3, 1);
+  std::cout << "Resize the terminal or press Q to quit.";
 }
 
 void draw_piece_preview(gm::PieceType type, int top, int left) {
@@ -132,15 +150,23 @@ void draw_board(const gm::Snapshot& snapshot) {
 void draw_hold(const gm::Snapshot& snapshot) {
   static bool initialized = false;
   static std::optional<gm::PieceType> last_hold;
-  if (initialized && last_hold == snapshot.hold) {
+  static bool last_hold_available = true;
+  if (initialized && last_hold == snapshot.hold &&
+      last_hold_available == snapshot.hold_available) {
     return;
   }
   initialized = true;
   last_hold = snapshot.hold;
+  last_hold_available = snapshot.hold_available;
 
   const auto& held = snapshot.hold;
   if (held.has_value()) {
     draw_piece_preview(*held, HOLD_TOP, HOLD_LEFT + 1);
+    if (!snapshot.hold_available) {
+      text_fixed(HOLD_TOP + 5, HOLD_LEFT + 2, "locked", 7);
+    } else {
+      text_fixed(HOLD_TOP + 5, HOLD_LEFT + 2, "C hold", 7);
+    }
   } else {
     for (int row = 0; row < 4; row++) {
       for (int col = 0; col < 4; col++) {
@@ -148,6 +174,7 @@ void draw_hold(const gm::Snapshot& snapshot) {
       }
     }
     text_fixed(HOLD_TOP + 3, HOLD_LEFT + 2, "empty", 7);
+    text_fixed(HOLD_TOP + 5, HOLD_LEFT + 2, "C hold", 7);
   }
 }
 
@@ -196,11 +223,13 @@ void draw_status(const gm::Snapshot& snapshot, int fps) {
 }
 
 void draw_info() {
-  text(NEXT_TOP + 16, NEXT_LEFT + 1, "A/D move");
-  text(NEXT_TOP + 17, NEXT_LEFT + 1, "W rotate");
-  text(NEXT_TOP + 18, NEXT_LEFT + 1, "S soft");
-  text(NEXT_TOP + 19, NEXT_LEFT + 1, "Space drop");
-  text(NEXT_TOP + 20, NEXT_LEFT + 1, "Q quit");
+  text_fixed(NEXT_TOP + 15, NEXT_LEFT + 1, "A/D or <-/->", 14);
+  text_fixed(NEXT_TOP + 16, NEXT_LEFT + 1, "W or Up rot", 14);
+  text_fixed(NEXT_TOP + 17, NEXT_LEFT + 1, "Z ccw X 180", 14);
+  text_fixed(NEXT_TOP + 18, NEXT_LEFT + 1, "S or Down", 14);
+  text_fixed(NEXT_TOP + 19, NEXT_LEFT + 1, "Space drop", 14);
+  text_fixed(NEXT_TOP + 20, NEXT_LEFT + 1, "C hold", 14);
+  text_fixed(NEXT_TOP + 21, NEXT_LEFT + 1, "P pause R rst", 14);
 }
 
 void draw_overlay(gm::Phase phase) {
@@ -247,9 +276,18 @@ void window(int top, int left, int width, int height, std::string title) {
 }
 
 void render(int fps) {
+  static bool was_too_small = false;
+  const tc::Size terminal_size = tc::terminal_size();
+  if (terminal_too_small(terminal_size)) {
+    draw_small_terminal_message(terminal_size);
+    was_too_small = true;
+    std::cout << std::flush;
+    return;
+  }
+
   const gm::Snapshot snapshot = gm::snapshot();
   static bool first_render = true;
-  if (first_render) {
+  if (first_render || was_too_small) {
     tc::clear_screen();
     tc::hide_cursor();
     window(HOLD_TOP, HOLD_LEFT, 9, 7, "Hold");
@@ -258,6 +296,7 @@ void render(int fps) {
     window(NEXT_TOP, NEXT_LEFT, 9, 22, "Next");
     draw_info();
     first_render = false;
+    was_too_small = false;
   }
 
   draw_hold(snapshot);

@@ -15,6 +15,11 @@
 #pragma once
 
 namespace tc {  // terminal control
+struct Size {
+  int rows = 0;
+  int cols = 0;
+};
+
 void move_to(int row, int col);
 void set_fore_color(int id);
 void set_back_color(int id);
@@ -22,4 +27,5 @@ void clear_screen();
 void reset_color();
 void hide_cursor();
 void show_cursor();
+Size terminal_size();
 }  // namespace tc

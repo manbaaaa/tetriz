@@ -16,3 +16,13 @@ add_executable(tetriz
   utils.cpp
 )
 target_link_libraries(tetriz PRIVATE Threads::Threads)
+
+enable_testing()
+
+add_executable(tetriz_game_control_test
+  control.cpp
+  game.cpp
+  tests/game_control_test.cpp
+)
+target_link_libraries(tetriz_game_control_test PRIVATE Threads::Threads)
+add_test(NAME tetriz_game_control_test COMMAND tetriz_game_control_test)

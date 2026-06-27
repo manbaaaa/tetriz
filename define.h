@@ -34,6 +34,8 @@
 #define KEY_Q 'q'
 #define KEY_R 'r'
 #define KEY_W 'w'
+#define KEY_X 'x'
+#define KEY_Z 'z'
 #define KEY_A 'a'
 #define KEY_S 's'
 #define KEY_D 'd'

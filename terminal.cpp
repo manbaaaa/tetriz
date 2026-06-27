@@ -15,6 +15,9 @@
 #include "./terminal.h"
 #include "./define.h"
 
+#include <sys/ioctl.h>
+#include <unistd.h>
+
 #define CSI "\033["
 
 void tc::move_to(int row, int col) {
@@ -32,3 +35,11 @@ void tc::reset_color() { std::cout << CSI << "0m"; }
 void tc::hide_cursor() { std::cout << CSI << "?25l"; }
 
 void tc::show_cursor() { std::cout << CSI << "?25h"; }
+
+tc::Size tc::terminal_size() {
+  winsize size{};
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == -1) {
+    return {};
+  }
+  return Size{static_cast<int>(size.ws_row), static_cast<int>(size.ws_col)};
+}

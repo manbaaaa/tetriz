@@ -138,6 +138,23 @@ bool try_move(int row_delta, int col_delta) {
   return true;
 }
 
+void try_rotate_steps(int steps) {
+  if (phase_state != Phase::Playing || current.type == PieceType::O) {
+    return;
+  }
+  Piece rotated = current;
+  rotated.rotation = (rotated.rotation + steps + 4) % 4;
+  const std::array<int, 5> kicks = {0, -1, 1, -2, 2};
+  for (int kick : kicks) {
+    Piece candidate = rotated;
+    candidate.col += kick;
+    if (!collides(candidate)) {
+      current = candidate;
+      return;
+    }
+  }
+}
+
 int clear_lines() {
   int cleared = 0;
   for (int row = BOARD_HEIGHT - 1; row >= 0; row--) {
@@ -241,20 +258,17 @@ void tick(std::chrono::steady_clock::time_point now) {
 
 void rotate() {
   std::lock_guard<std::mutex> lock(state_mutex);
-  if (phase_state != Phase::Playing || current.type == PieceType::O) {
-    return;
-  }
-  Piece rotated = current;
-  rotated.rotation = (rotated.rotation + 1) % 4;
-  const std::array<int, 5> kicks = {0, -1, 1, -2, 2};
-  for (int kick : kicks) {
-    Piece candidate = rotated;
-    candidate.col += kick;
-    if (!collides(candidate)) {
-      current = candidate;
-      return;
-    }
-  }
+  try_rotate_steps(1);
+}
+
+void rotate_counterclockwise() {
+  std::lock_guard<std::mutex> lock(state_mutex);
+  try_rotate_steps(-1);
+}
+
+void rotate_180() {
+  std::lock_guard<std::mutex> lock(state_mutex);
+  try_rotate_steps(2);
 }
 
 void left() {
@@ -335,7 +349,7 @@ Snapshot snapshot() {
   std::lock_guard<std::mutex> lock(state_mutex);
   return Snapshot{board_state, current,      ghost_piece_unlocked(), queue_state,
                   hold_state,  phase_state, score_state,            level_state,
-                  lines_state, fall_interval_value()};
+                  lines_state, fall_interval_value(), !hold_used};
 }
 
 Blocks blocks_for(const Piece& piece) {

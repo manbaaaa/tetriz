@@ -14,14 +14,19 @@
 
 #pragma once
 
+#include <string>
+
 namespace gm {
-char getch();
+std::string read_key();
+void handle_command(const std::string& command);
 void key_event();
 void start_listener();
 
 // keyboard commands
 void command_quit();
 void command_rotate();
+void command_rotate_counterclockwise();
+void command_rotate_180();
 void command_left();
 void command_right();
 void command_down();

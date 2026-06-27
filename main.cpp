@@ -18,8 +18,32 @@
 #include "./terminal.h"
 #include "./utils.h"
 
+#include <csignal>
+
+namespace {
+class TerminalGuard {
+ public:
+  TerminalGuard() { tc::hide_cursor(); }
+  ~TerminalGuard() { restore_terminal(); }
+
+  TerminalGuard(const TerminalGuard&) = delete;
+  TerminalGuard& operator=(const TerminalGuard&) = delete;
+
+ private:
+  void restore_terminal() {
+    tc::show_cursor();
+    tc::reset_color();
+    tc::clear_screen();
+    tc::move_to(1, 1);
+  }
+};
+
+void handle_signal(int) {
+  gm::quit();
+}
+}  // namespace
+
 void init() {
-  tc::hide_cursor();
   gm::init();
   gm::start_listener();
 }
@@ -37,17 +61,14 @@ void loop() {
   }
 }
 
-void exit() {
-  tc::show_cursor();
-  tc::reset_color();
-  tc::clear_screen();
-  tc::move_to(1, 1);
-  std::cout << "Bye!" << std::endl;
-}
-
 int main() {
-  init();
-  loop();
-  exit();
+  std::signal(SIGINT, handle_signal);
+  std::signal(SIGTERM, handle_signal);
+  {
+    TerminalGuard terminal_guard;
+    init();
+    loop();
+  }
+  std::cout << "Bye!" << std::endl;
   return 0;
 }

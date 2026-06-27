@@ -62,6 +62,7 @@ struct Snapshot {
   int level = 1;
   int lines = 0;
   int fall_interval_ms = 800;
+  bool hold_available = true;
 };
 
 extern std::atomic_bool running;
@@ -71,6 +72,8 @@ void quit();
 void tick(std::chrono::steady_clock::time_point now);
 
 void rotate();
+void rotate_counterclockwise();
+void rotate_180();
 void left();
 void right();
 void down();
